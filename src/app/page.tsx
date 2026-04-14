@@ -1,65 +1,106 @@
-import Image from "next/image";
+import { Search, Sprout, PackageOpen, CheckCircle, TrendingUp, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
 
-export default function Home() {
+export default function PanelPrincipal() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="p-8 text-gray-800">
+      {/* Header */}
+      <header className="flex justify-between items-center mb-8 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Panel Principal</h1>
+          <p className="text-gray-500 text-sm">Bienvenido de nuevo, Administrador</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="relative w-80">
+          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+            <Search className="w-5 h-5 text-gray-400" />
+          </div>
+          <input 
+            type="search" 
+            className="block w-full p-2.5 pl-10 text-sm text-gray-900 bg-gray-50 rounded-xl border border-gray-200 focus:ring-green-500 focus:border-green-500 outline-none" 
+            placeholder="Buscar..." 
+            required 
+          />
         </div>
-      </main>
+      </header>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        {[
+          { title: 'Especies Registradas', value: '12', subtitle: '+2 este mes', icon: Sprout, color: 'text-green-500', bg: 'bg-green-100', subColor: 'text-green-500' },
+          { title: 'Lotes Activos', value: '45', subtitle: 'En producción', icon: PackageOpen, color: 'text-blue-500', bg: 'bg-blue-100', subColor: 'text-green-500' },
+          { title: 'Lotes Completados', value: '128', subtitle: 'Histórico total', icon: CheckCircle, color: 'text-purple-500', bg: 'bg-purple-100', subColor: 'text-gray-400' },
+          { title: 'Rendimiento Total', value: '89.2%', subtitle: 'Promedio global', icon: TrendingUp, color: 'text-orange-500', bg: 'bg-orange-100', subColor: 'text-orange-500' }
+        ].map((kpi, idx) => {
+          const Icon = kpi.icon;
+          return (
+            <div key={idx} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col hover:border-green-300 transition-colors">
+              <div className="flex justify-between items-start mb-4">
+                <span className="text-sm font-medium text-gray-500 w-20 leading-tight">{kpi.title}</span>
+                <div className={`${kpi.bg} p-2 rounded-lg`}>
+                  <Icon className={`w-5 h-5 ${kpi.color}`} />
+                </div>
+              </div>
+              <h2 className="text-3xl font-extrabold text-gray-800">{kpi.value}</h2>
+              <span className={`text-xs font-semibold mt-2 ${kpi.subColor}`}>{kpi.subtitle}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Listado de vista rápida */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+          <h2 className="text-lg font-bold text-gray-800">Lotes Activos - Vista Rápida</h2>
+          <span className="bg-gray-100 text-gray-600 text-xs font-bold px-3 py-1 rounded-full">Actualizado hace 2 min</span>
+        </div>
+
+        <div className="divide-y divide-gray-50">
+          {[
+            { name: 'Shiitake', id: '#SH-042', date: 'Iniciado: 12 Oct 2023', phase: 'Fase: Incubación', hum: '85%', temp: '24°C', co2: '800 ppm', ico: 'bg-green-100 text-green-500' },
+            { name: 'Oyster Mushroom', id: '#OY-108', date: 'Iniciado: 15 Oct 2023', phase: 'Fase: Fructificación', hum: '92%', temp: '19°C', co2: '650 ppm', ico: 'bg-blue-100 text-blue-500' },
+            { name: 'Lion\'s Mane', id: '#LM-005', date: 'Iniciado: 18 Oct 2023', phase: 'Fase: Colonización', hum: '88%', temp: '22°C', co2: '920 ppm', ico: 'bg-orange-100 text-orange-500' },
+          ].map((lote, idx) => (
+             <div key={idx} className="p-4 px-6 flex items-center justify-between hover:bg-gray-50 transition-colors cursor-pointer">
+                <div className="flex items-center space-x-4">
+                  <div className={`p-3 rounded-full ${lote.ico}`}>
+                    <Sprout size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-800">{lote.name} <span className="text-gray-400 font-medium text-sm ml-1">{lote.id}</span></h3>
+                    <p className="text-xs text-gray-500">{lote.date} • {lote.phase}</p>
+                  </div>
+                </div>
+
+                <div className="flex space-x-12 items-center">
+                   <div className="text-center">
+                      <p className="text-[10px] font-bold text-gray-400 mb-1">HUMEDAD</p>
+                      <p className="font-bold text-gray-800 text-sm">{lote.hum}</p>
+                   </div>
+                   <div className="text-center">
+                      <p className="text-[10px] font-bold text-gray-400 mb-1">TEMPERATURA</p>
+                      <p className="font-bold text-gray-800 text-sm">{lote.temp}</p>
+                   </div>
+                   <div className="text-center">
+                      <p className="text-[10px] font-bold text-gray-400 mb-1">CO2</p>
+                      <p className="font-bold text-gray-800 text-sm">{lote.co2}</p>
+                   </div>
+                   <div className="text-gray-300">
+                     <ChevronRight size={20} />
+                   </div>
+                </div>
+             </div>
+          ))}
+        </div>
+
+        <div className="p-4 bg-gray-50 rounded-b-2xl border-t border-gray-100 flex justify-center">
+          <Link href="/batches">
+            <button className="bg-[#1cc03b] hover:bg-green-600 text-white font-bold py-2 px-6 rounded-xl transition-all shadow-md active:scale-95 text-sm">
+               Ver todos los lotes activos →
+            </button>
+          </Link>
+        </div>
+      </div>
+
     </div>
   );
 }
