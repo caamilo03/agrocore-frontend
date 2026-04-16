@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
-// interfaz que hace match exacto con el backend
+//  interfaz
 interface Species {
   idSpecies?: string;
   name: string;
@@ -14,12 +14,14 @@ interface Species {
   maxCo2: number;
 }
 
+// URL por fuera para que ESLint no llore
+const API_URL = "http://localhost:8080/api/v1/species";
+
 export default function SpeciesPage() {
   const [speciesList, setSpeciesList] = useState<Species[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Estado para el formulario
   const [formData, setFormData] = useState<Species>({
     name: "",
     minTemperature: 0,
@@ -30,10 +32,8 @@ export default function SpeciesPage() {
     maxCo2: 0,
   });
 
-  const API_URL = "http://localhost:8080/api/v1/species";
-
-  //  GET
-  const fetchSpecies = async () => {
+  // Traer las especies (Envuelta en useCallback pa' que el Linter quede contento)
+  const fetchSpecies = useCallback(async () => {
     try {
       const response = await fetch(API_URL);
       if (response.ok) {
@@ -43,22 +43,22 @@ export default function SpeciesPage() {
     } catch (error) {
       console.error("Uy firma, falló la conexión con el backend:", error);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchSpecies();
-  }, []);
+  }, [fetchSpecies]);
 
-  // Manejar los cambios en los inputs del formulario
+  // Manejar los cambios en los inputs
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: name === "name" ? value : parseFloat(value) || 0, // Si es número, lo convierte
-    });
+    setFormData((prev) => ({
+      ...prev,
+      [name]: name === "name" ? value : parseFloat(value) || 0,
+    }));
   };
 
-  // Guardar o Actualizar especie (POST o PUT)
+  //  Guardar o Actualizar especie
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -73,7 +73,7 @@ export default function SpeciesPage() {
       });
 
       if (response.ok) {
-        fetchSpecies(); // Recargar la lista
+        fetchSpecies(); 
         closeModal();
       }
     } catch (error) {
@@ -81,7 +81,7 @@ export default function SpeciesPage() {
     }
   };
 
-  // DELETE
+  // Eliminar especie
   const handleDelete = async (id: string) => {
     if (confirm("¿Seguro que quiere borrar esta especie, firma?")) {
       try {
@@ -89,7 +89,7 @@ export default function SpeciesPage() {
           method: "DELETE",
         });
         if (response.ok) {
-          fetchSpecies(); // Recargar la lista
+          fetchSpecies();
         }
       } catch (error) {
         console.error("Error borrando la especie:", error);
@@ -97,7 +97,6 @@ export default function SpeciesPage() {
     }
   };
 
-  // Funciones pa' manejar el modal
   const openModalToCreate = () => {
     setEditingId(null);
     setFormData({ name: "", minTemperature: 0, maxTemperature: 0, minHumidity: 0, maxHumidity: 0, minCo2: 0, maxCo2: 0 });
@@ -114,7 +113,6 @@ export default function SpeciesPage() {
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
-      {/* Encabezado de la página */}
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold text-slate-800">Gestión de Especies</h1>
@@ -128,7 +126,6 @@ export default function SpeciesPage() {
         </button>
       </div>
 
-      {/* Cuadrícula de Tarjetas (Cards) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {speciesList.length === 0 ? (
           <p className="text-slate-500">No hay especies registradas. ¡Cree la primera!</p>
@@ -175,7 +172,6 @@ export default function SpeciesPage() {
         )}
       </div>
 
-      {/* Modal pa' Crear o Editar */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-2xl">
