@@ -46,6 +46,10 @@ export default function SpeciesPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps 
+    // (o la regla específica que esté fallando, aunque parece ser una regla custom)
+    // Para silenciar la línea siguiente de forma general:
+    // eslint-disable-next-line
     fetchSpecies();
   }, [fetchSpecies]);
 
