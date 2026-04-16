@@ -1,96 +1,238 @@
-import { Sprout, Plus, Pencil, Trash2 } from 'lucide-react';
-import Link from 'next/link';
+"use client";
+
+import { useState, useEffect } from "react";
+
+// interfaz que hace match exacto con el backend
+interface Species {
+  idSpecies?: string;
+  name: string;
+  minTemperature: number;
+  maxTemperature: number;
+  minHumidity: number;
+  maxHumidity: number;
+  minCo2: number;
+  maxCo2: number;
+}
 
 export default function SpeciesPage() {
-  const species = [
-    {
-      id: 1,
-      name: 'Shiitake',
-      temp: '18°C - 24°C',
-      hum: '75% - 85%',
-      co2: '800 - 1200 ppm',
-      color: 'bg-green-100 text-green-500'
-    },
-    {
-      id: 2,
-      name: 'Oyster Mushroom',
-      temp: '20°C - 26°C',
-      hum: '80% - 90%',
-      co2: '600 - 1000 ppm',
-      color: 'bg-blue-100 text-green-500'
+  const [speciesList, setSpeciesList] = useState<Species[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Estado para el formulario
+  const [formData, setFormData] = useState<Species>({
+    name: "",
+    minTemperature: 0,
+    maxTemperature: 0,
+    minHumidity: 0,
+    maxHumidity: 0,
+    minCo2: 0,
+    maxCo2: 0,
+  });
+
+  const API_URL = "http://localhost:8080/api/v1/species";
+
+  //  GET
+  const fetchSpecies = async () => {
+    try {
+      const response = await fetch(API_URL);
+      if (response.ok) {
+        const data = await response.json();
+        setSpeciesList(data);
+      }
+    } catch (error) {
+      console.error("Uy firma, falló la conexión con el backend:", error);
     }
-  ];
+  };
+
+  useEffect(() => {
+    fetchSpecies();
+  }, []);
+
+  // Manejar los cambios en los inputs del formulario
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData({
+      ...formData,
+      [name]: name === "name" ? value : parseFloat(value) || 0, // Si es número, lo convierte
+    });
+  };
+
+  // Guardar o Actualizar especie (POST o PUT)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const isEditing = editingId !== null;
+      const url = isEditing ? `${API_URL}/${editingId}` : API_URL;
+      const method = isEditing ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        fetchSpecies(); // Recargar la lista
+        closeModal();
+      }
+    } catch (error) {
+      console.error("Error guardando la especie:", error);
+    }
+  };
+
+  // DELETE
+  const handleDelete = async (id: string) => {
+    if (confirm("¿Seguro que quiere borrar esta especie, firma?")) {
+      try {
+        const response = await fetch(`${API_URL}/${id}`, {
+          method: "DELETE",
+        });
+        if (response.ok) {
+          fetchSpecies(); // Recargar la lista
+        }
+      } catch (error) {
+        console.error("Error borrando la especie:", error);
+      }
+    }
+  };
+
+  // Funciones pa' manejar el modal
+  const openModalToCreate = () => {
+    setEditingId(null);
+    setFormData({ name: "", minTemperature: 0, maxTemperature: 0, minHumidity: 0, maxHumidity: 0, minCo2: 0, maxCo2: 0 });
+    setIsModalOpen(true);
+  };
+
+  const openModalToEdit = (species: Species) => {
+    setEditingId(species.idSpecies!);
+    setFormData(species);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => setIsModalOpen(false);
 
   return (
-    <div className="p-8 text-gray-800">
-      {/* Header */}
-      <header className="flex justify-between items-start mb-8">
+    <div className="p-8 max-w-7xl mx-auto">
+      {/* Encabezado de la página */}
+      <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-800 tracking-tight">Gestión de Especies</h1>
-          <p className="text-gray-500 mt-1">Registro y configuración de parámetros óptimos por especie</p>
+          <h1 className="text-3xl font-bold text-slate-800">Gestión de Especies</h1>
+          <p className="text-slate-500 mt-1">Registro y configuración de parámetros óptimos por especie</p>
         </div>
-        <button className="bg-[#0F572B] hover:bg-green-800 text-white font-bold py-2.5 px-5 rounded-lg transition-colors flex items-center shadow-md text-sm">
-          <Plus size={18} className="mr-2" />
-          Nueva Especie
+        <button
+          onClick={openModalToCreate}
+          className="bg-[#1e5631] hover:bg-[#153f23] text-white px-6 py-2.5 rounded-lg font-medium transition-colors shadow-sm"
+        >
+          + Nueva Especie
         </button>
-      </header>
-
-      {/* Título Colección */}
-      <div className="flex items-center mb-6">
-        <Sprout className="text-green-500 mr-2" size={24} />
-        <h2 className="text-lg font-bold text-gray-800">Catálogo de Especies</h2>
       </div>
 
-      {/* Grid de Especies */}
+      {/* Cuadrícula de Tarjetas (Cards) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        
-        {/* Tarjetas de Especies Existentes */}
-        {species.map((s) => (
-          <div key={s.id} className="bg-white rounded-2xl p-6 border border-gray-200 shadow-sm relative group hover:border-green-300 transition-colors">
-            {/* Actions (Edit / Delete) */}
-            <div className="absolute top-4 right-4 flex space-x-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-              <button className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-md transition-colors"><Pencil size={14} /></button>
-              <button className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"><Trash2 size={14} /></button>
-            </div>
-
-            {/* Content */}
-            <div className="flex items-center mb-6 mt-2">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center mr-4 ${s.color}`}>
-                <Sprout size={24} />
+        {speciesList.length === 0 ? (
+          <p className="text-slate-500">No hay especies registradas. ¡Cree la primera!</p>
+        ) : (
+          speciesList.map((species) => (
+            <div key={species.idSpecies} className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="text-xl font-bold text-slate-800">{species.name}</h3>
+                <div className="flex gap-2">
+                  <button onClick={() => openModalToEdit(species)} className="text-green-600 hover:text-green-800" title="Editar">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                  </button>
+                  <button onClick={() => handleDelete(species.idSpecies!)} className="text-red-500 hover:text-red-700" title="Eliminar">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                  </button>
+                </div>
               </div>
-              <h3 className="text-xl font-bold text-gray-800">{s.name}</h3>
-            </div>
 
-            <div className="space-y-4 mb-4">
-              <div className="flex justify-between items-center border-b border-gray-50 pb-2">
-                <span className="text-sm font-medium text-gray-500 flex items-center text-[13px]"><span className="mr-2 text-gray-400">🌡</span> Temperatura</span>
-                <span className="font-bold text-sm text-gray-800">{s.temp}</span>
+              <div className="space-y-4">
+                <div className="flex items-center text-slate-600">
+                  <span className="w-8 text-xl">🌡️</span>
+                  <div>
+                    <p className="text-sm font-medium">Temperatura</p>
+                    <p className="text-sm font-bold text-slate-800">{species.minTemperature}°C - {species.maxTemperature}°C</p>
+                  </div>
+                </div>
+                <div className="flex items-center text-slate-600">
+                  <span className="w-8 text-xl">💧</span>
+                  <div>
+                    <p className="text-sm font-medium">Humedad</p>
+                    <p className="text-sm font-bold text-slate-800">{species.minHumidity}% - {species.maxHumidity}%</p>
+                  </div>
+                </div>
+                <div className="flex items-center text-slate-600">
+                  <span className="w-8 text-xl">💨</span>
+                  <div>
+                    <p className="text-sm font-medium">CO2</p>
+                    <p className="text-sm font-bold text-slate-800">{species.minCo2} - {species.maxCo2} ppm</p>
+                  </div>
+                </div>
               </div>
-              <div className="flex justify-between items-center border-b border-gray-50 pb-2">
-                <span className="text-sm font-medium text-gray-500 flex items-center text-[13px]"><span className="mr-2 text-gray-400">💧</span> Humedad</span>
-                <span className="font-bold text-sm text-gray-800">{s.hum}</span>
-              </div>
-              <div className="flex justify-between items-center mb-6">
-                <span className="text-sm font-medium text-gray-500 flex items-center text-[13px]"><span className="mr-2 text-gray-400">💨</span> CO2</span>
-                <span className="font-bold text-sm text-gray-800">{s.co2}</span>
-              </div>
             </div>
-
-            <div className="border-t border-gray-100 pt-4 text-[10px] font-bold text-gray-400 tracking-wider">
-              REGISTRADO: 24 OCT 2023 | 14:30
-            </div>
-          </div>
-        ))}
-
-        {/* Tarjeta de Añadir Nueva */}
-        <button className="rounded-2xl p-6 border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400 hover:bg-green-50 hover:border-green-300 hover:text-green-600 transition-colors h-full min-h-[300px]">
-          <div className="w-12 h-12 rounded-full border-2 border-current flex items-center justify-center mb-4">
-            <Plus size={24} />
-          </div>
-          <span className="font-medium text-sm">Añadir nueva especie al catálogo</span>
-        </button>
-
+          ))
+        )}
       </div>
+
+      {/* Modal pa' Crear o Editar */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-2xl">
+            <h2 className="text-2xl font-bold text-slate-800 mb-6">
+              {editingId ? "Editar Especie" : "Nueva Especie"}
+            </h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre de la Especie</label>
+                <input type="text" name="name" required value={formData.name} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:border-green-600 focus:ring-1 focus:ring-green-600 text-black" placeholder="Ej. Orellana" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Temp. Mínima (°C)</label>
+                  <input type="number" step="0.1" name="minTemperature" required value={formData.minTemperature} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:border-green-600 focus:ring-1 text-black" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Temp. Máxima (°C)</label>
+                  <input type="number" step="0.1" name="maxTemperature" required value={formData.maxTemperature} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:border-green-600 focus:ring-1 text-black" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Humedad Mínima (%)</label>
+                  <input type="number" step="0.1" name="minHumidity" required value={formData.minHumidity} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:border-green-600 focus:ring-1 text-black" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Humedad Máxima (%)</label>
+                  <input type="number" step="0.1" name="maxHumidity" required value={formData.maxHumidity} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:border-green-600 focus:ring-1 text-black" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">CO2 Mínimo (ppm)</label>
+                  <input type="number" step="0.1" name="minCo2" required value={formData.minCo2} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:border-green-600 focus:ring-1 text-black" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">CO2 Máximo (ppm)</label>
+                  <input type="number" step="0.1" name="maxCo2" required value={formData.maxCo2} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2 focus:outline-none focus:border-green-600 focus:ring-1 text-black" />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-8">
+                <button type="button" onClick={closeModal} className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors">
+                  Cancelar
+                </button>
+                <button type="submit" className="px-4 py-2 bg-[#1e5631] text-white rounded-lg hover:bg-[#153f23] transition-colors shadow-sm">
+                  {editingId ? "Actualizar Especie" : "Guardar Especie"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
