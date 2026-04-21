@@ -1,39 +1,131 @@
-import { Plus, Thermometer, Droplets, Wind, CheckCircle2 } from 'lucide-react';
-import Image from 'next/image';
+"use client";
+
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, Thermometer, Droplets, Wind, CheckCircle2, Edit, Trash2 } from 'lucide-react';
+
+// 1. Interfaz que hace match con el Backend
+interface CropBatch {
+  id?: string;
+  idSpecies: string | null;
+  idSubstrate: string | null;
+  idSpeciesSupplier: string | null;
+  idSubstrateSupplier: string | null;
+  idUser: string | null;
+  startDate: string;
+  endDate: string | null;
+  status: string;
+  yieldKg: number;
+}
+
+const API_URL = "http://localhost:8080/api/v1/batches";
 
 export default function BatchesPage() {
-  const batches = [
-    {
-      id: 1,
-      name: 'Lote: Shiitake #082',
-      idCode: 'ID: SH-2023-082',
-      startDate: 'Inicio: 12/10/2023',
-      phase: 'FASE: INCUBACIÓN',
-      image: 'https://images.unsplash.com/photo-1595855768297-dc1fb50174aa?auto=format&fit=crop&q=80&w=800',
-      supplier: 'BioFungi Labs',
-      substrate: 'Roble + Salvado',
-      telemetry: {
-        temp: { current: '21.4°C', optimal: '18-24°C', iconColor: 'text-blue-400', bg: 'bg-blue-50' },
-        hum: { current: '85%', optimal: '80-90%', iconColor: 'text-cyan-400', bg: 'bg-cyan-50' },
-        co2: { current: '650 ppm', optimal: '<800', iconColor: 'text-orange-300', bg: 'bg-orange-50' }
+  const [batchesList, setBatchesList] = useState<CropBatch[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [formData, setFormData] = useState<CropBatch>({
+    idSpecies: "",
+    idSubstrate: "",
+    idSpeciesSupplier: "",
+    idSubstrateSupplier: "",
+    idUser: "",
+    startDate: "",
+    endDate: "",
+    status: "ACTIVO",
+    yieldKg: 0,
+  });
+
+  // 2. Traer los Lotes desde el backend
+  const fetchBatches = useCallback(async () => {
+    try {
+      const response = await fetch(API_URL);
+      if (response.ok) {
+        const data = await response.json();
+        setBatchesList(data);
       }
-    },
-    {
-      id: 2,
-      name: 'Lote: Ostra Blanca #045',
-      idCode: 'ID: OB-2023-045',
-      startDate: 'Inicio: 05/11/2023',
-      phase: 'FASE: FRUCTIFICACIÓN',
-      image: 'https://images.unsplash.com/photo-1610484738515-520e52ddb3e4?auto=format&fit=crop&q=80&w=800',
-      supplier: 'AgroMyco Corp',
-      substrate: 'Paja de Trigo',
-      telemetry: {
-        temp: { current: '19.8°C', optimal: '18-24°C', iconColor: 'text-blue-400', bg: 'bg-blue-50' },
-        hum: { current: '88%', optimal: '85-95%', iconColor: 'text-cyan-400', bg: 'bg-cyan-50' },
-        co2: { current: '720 ppm', optimal: '<800', iconColor: 'text-orange-300', bg: 'bg-orange-50' }
+    } catch (error) {
+      console.error("Falló la conexión con el backend:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBatches();
+  }, [fetchBatches]);
+
+  // 3. Manejadores del Formulario
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: name === "yieldKg" ? parseFloat(value) || 0 : value,
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      // Limpiamos los UUID vacíos para que no estalle el backend
+      const payload: any = { ...formData };
+      if (!payload.idSpecies) payload.idSpecies = null;
+      if (!payload.idSubstrate) payload.idSubstrate = null;
+      if (!payload.idSpeciesSupplier) payload.idSpeciesSupplier = null;
+      if (!payload.idSubstrateSupplier) payload.idSubstrateSupplier = null;
+      if (!payload.idUser) payload.idUser = null;
+      if (!payload.endDate) payload.endDate = null;
+
+      const isEditing = editingId !== null;
+      const url = isEditing ? `${API_URL}/${editingId}` : API_URL;
+      const method = isEditing ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        fetchBatches();
+        closeModal();
+      } else {
+        alert("Fallo al guardar. ¿Verificó que los UUID existan en la BD?");
+      }
+    } catch (error) {
+      console.error("Error guardando el lote:", error);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm("¿Seguro que quiere borrar este lote?")) {
+      try {
+        const response = await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+        if (response.ok) fetchBatches();
+      } catch (error) {
+        console.error("Error borrando el lote:", error);
       }
     }
-  ];
+  };
+
+  const openModalToCreate = () => {
+    setEditingId(null);
+    setFormData({
+      idSpecies: "", idSubstrate: "", idSpeciesSupplier: "", idSubstrateSupplier: "", idUser: "",
+      startDate: "", endDate: "", status: "ACTIVO", yieldKg: 0
+    });
+    setIsModalOpen(true);
+  };
+
+  const openModalToEdit = (batch: CropBatch) => {
+    setEditingId(batch.id!);
+    setFormData({
+      ...batch,
+      startDate: batch.startDate ? batch.startDate.substring(0, 16) : "",
+      endDate: batch.endDate ? batch.endDate.substring(0, 16) : ""
+    });
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => setIsModalOpen(false);
 
   return (
     <div className="p-8 text-gray-800 max-w-7xl mx-auto">
@@ -43,111 +135,164 @@ export default function BatchesPage() {
           <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-2">Lotes Activos</h1>
           <p className="text-gray-500 font-medium">Supervisión y control de producción en tiempo real.</p>
         </div>
-        <button className="bg-[#0F572B] hover:bg-green-800 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md flex items-center text-sm active:scale-95">
+        <button 
+          onClick={openModalToCreate}
+          className="bg-[#0F572B] hover:bg-green-800 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md flex items-center text-sm active:scale-95"
+        >
           <Plus size={18} className="mr-2" />
           Crear Nuevo Lote
         </button>
       </header>
 
-      {/* Grid de Lotes */}
+      {/* Grid de Lotes desde la BD */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        
-        {batches.map((batch) => (
-          <div key={batch.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow relative">
-            
-            {/* Header Image & Badge */}
-            <div className="h-48 w-full relative">
-              <img 
-                src={batch.image} 
-                alt={batch.name}
-                className="w-full h-full object-cover object-center"
-              />
-              <div className="absolute top-4 right-4 bg-[#23de4b] text-white px-3 py-1 rounded-full text-[10px] font-bold tracking-widest shadow-sm uppercase z-10 flex items-center">
-                {batch.phase}
-              </div>
-            </div>
-
-            <div className="bg-white p-8">
-              {/* Lote Info */}
-              <div className="mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-1">{batch.name}</h2>
-                <p className="text-gray-400 text-sm font-medium">{batch.idCode} | {batch.startDate}</p>
-              </div>
-
-              {/* Detalles de Insumos */}
-              <div className="flex bg-[#F8FAFC] rounded-xl p-5 mb-8 border border-gray-50">
-                <div className="w-1/2">
-                  <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-1">Proveedor</p>
-                  <p className="font-bold text-gray-800 text-sm">{batch.supplier}</p>
-                </div>
-                <div className="w-1/2">
-                  <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-1">Sustrato</p>
-                  <p className="font-bold text-gray-800 text-sm">{batch.substrate}</p>
+        {batchesList.length === 0 ? (
+          <p className="text-gray-500 font-medium">No hay lotes registrados en la base de datos.</p>
+        ) : (
+          batchesList.map((batch) => (
+            <div key={batch.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow relative">
+              
+              {/* Header Image & Badge */}
+              <div className="h-48 w-full relative">
+                <img 
+                  src="https://images.unsplash.com/photo-1595855768297-dc1fb50174aa?auto=format&fit=crop&q=80&w=800" 
+                  alt="Cultivo"
+                  className="w-full h-full object-cover object-center"
+                />
+                <div className={`absolute top-4 right-4 text-white px-3 py-1 rounded-full text-[10px] font-bold tracking-widest shadow-sm uppercase z-10 flex items-center ${batch.status === 'ACTIVO' ? 'bg-[#23de4b]' : 'bg-orange-500'}`}>
+                  {batch.status}
                 </div>
               </div>
 
-              {/* Telemetría */}
-              <div>
-                <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-4">Telemetría en tiempo real</p>
+              <div className="bg-white p-8 relative">
                 
-                <div className="space-y-4">
-                  {/* Item Temp */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3 w-1/3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${batch.telemetry.temp.bg}`}>
-                        <Thermometer size={16} className={batch.telemetry.temp.iconColor} />
+                {/* Botones de Acción (Editar/Eliminar) */}
+                <div className="absolute top-6 right-6 flex gap-3">
+                  <button onClick={() => openModalToEdit(batch)} className="text-gray-400 hover:text-[#0F572B] transition-colors" title="Editar Lote">
+                    <Edit size={20} />
+                  </button>
+                  <button onClick={() => handleDelete(batch.id!)} className="text-gray-400 hover:text-red-500 transition-colors" title="Eliminar Lote">
+                    <Trash2 size={20} />
+                  </button>
+                </div>
+
+                {/* Lote Info */}
+                <div className="mb-6 pr-16">
+                  <h2 className="text-2xl font-bold text-gray-900 mb-1">Lote: {batch.id?.substring(0, 8)}</h2>
+                  <p className="text-gray-400 text-sm font-medium">Inicio: {new Date(batch.startDate).toLocaleDateString()} | Rendimiento: {batch.yieldKg} kg</p>
+                </div>
+
+                {/* Detalles de Insumos (Usando los UUID por ahora) */}
+                <div className="flex bg-[#F8FAFC] rounded-xl p-5 mb-8 border border-gray-50">
+                  <div className="w-1/2 overflow-hidden pr-2">
+                    <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-1">ID Especie</p>
+                    <p className="font-bold text-gray-800 text-xs truncate" title={batch.idSpecies || "N/A"}>{batch.idSpecies || "No asignada"}</p>
+                  </div>
+                  <div className="w-1/2 overflow-hidden">
+                    <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-1">ID Sustrato</p>
+                    <p className="font-bold text-gray-800 text-xs truncate" title={batch.idSubstrate || "N/A"}>{batch.idSubstrate || "No asignado"}</p>
+                  </div>
+                </div>
+
+                {/* Telemetría Estática (Placeholder mientras se conecta el módulo IoT real) */}
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-4">Telemetría en tiempo real (Simulada)</p>
+                  
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3 w-1/3">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-50">
+                          <Thermometer size={16} className="text-blue-400" />
+                        </div>
+                        <span className="text-sm font-semibold text-gray-600">Temperatura</span>
                       </div>
-                      <span className="text-sm font-semibold text-gray-600">Temperatura</span>
+                      <div className="flex items-center space-x-3 w-2/3 justify-end">
+                        <span className="text-lg font-extrabold text-gray-900">21.4°C</span>
+                        <CheckCircle2 size={18} className="text-green-500" />
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-3 w-2/3 justify-end">
-                      <span className="text-lg font-extrabold text-gray-900">{batch.telemetry.temp.current}</span>
-                      <span className="text-[11px] text-gray-400 font-medium">| óptimo: {batch.telemetry.temp.optimal}</span>
-                      <CheckCircle2 size={18} className="text-green-500" />
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3 w-1/3">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-cyan-50">
+                          <Droplets size={16} className="text-cyan-400" />
+                        </div>
+                        <span className="text-sm font-semibold text-gray-600">Humedad</span>
+                      </div>
+                      <div className="flex items-center space-x-3 w-2/3 justify-end">
+                        <span className="text-lg font-extrabold text-gray-900">85%</span>
+                        <CheckCircle2 size={18} className="text-green-500" />
+                      </div>
                     </div>
                   </div>
+                </div>
 
-                  {/* Item Hum */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3 w-1/3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${batch.telemetry.hum.bg}`}>
-                        <Droplets size={16} className={batch.telemetry.hum.iconColor} />
-                      </div>
-                      <span className="text-sm font-semibold text-gray-600">Humedad</span>
-                    </div>
-                    <div className="flex items-center space-x-3 w-2/3 justify-end">
-                      <span className="text-lg font-extrabold text-gray-900">{batch.telemetry.hum.current}</span>
-                      <span className="text-[11px] text-gray-400 font-medium">| óptimo: {batch.telemetry.hum.optimal}</span>
-                      <CheckCircle2 size={18} className="text-green-500" />
-                    </div>
-                  </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
 
-                  {/* Item CO2 */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3 w-1/3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${batch.telemetry.co2.bg}`}>
-                        <Wind size={16} className={batch.telemetry.co2.iconColor} />
-                      </div>
-                      <span className="text-sm font-semibold text-gray-600">CO2</span>
-                    </div>
-                    <div className="flex items-center space-x-3 w-2/3 justify-end">
-                      <span className="text-lg font-extrabold text-gray-900">{batch.telemetry.co2.current}</span>
-                      <span className="text-[11px] text-gray-400 font-medium">| óptimo: {batch.telemetry.co2.optimal}</span>
-                      <CheckCircle2 size={18} className="text-green-500" />
-                    </div>
-                  </div>
-
+      {/* Modal de Formulario con diseño limpio */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <h2 className="text-2xl font-extrabold text-gray-900 mb-6">
+              {editingId ? "Editar Lote" : "Crear Nuevo Lote"}
+            </h2>
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="grid grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Fecha de Inicio</label>
+                  <input type="datetime-local" name="startDate" required value={formData.startDate} onChange={handleInputChange} className="w-full border-2 border-gray-200 rounded-xl p-3 text-gray-800 focus:outline-none focus:border-[#0F572B] focus:ring-0 transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Fecha de Fin</label>
+                  <input type="datetime-local" name="endDate" value={formData.endDate || ""} onChange={handleInputChange} className="w-full border-2 border-gray-200 rounded-xl p-3 text-gray-800 focus:outline-none focus:border-[#0F572B] focus:ring-0 transition-colors" />
                 </div>
               </div>
 
-              {/* Botón Finalizar */}
-              <button className="w-full mt-8 py-3 border-2 border-[#0F572B] text-[#0F572B] font-bold rounded-xl hover:bg-green-50 transition-colors text-sm">
-                FINALIZAR LOTE
-              </button>
+              <div className="grid grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Estado</label>
+                  <select name="status" value={formData.status} onChange={handleInputChange} className="w-full border-2 border-gray-200 rounded-xl p-3 text-gray-800 focus:outline-none focus:border-[#0F572B] focus:ring-0 transition-colors font-semibold">
+                    <option value="ACTIVO">ACTIVO</option>
+                    <option value="COSECHADO">COSECHADO</option>
+                    <option value="PERDIDO">PERDIDO</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Rendimiento (kg)</label>
+                  <input type="number" step="0.01" name="yieldKg" value={formData.yieldKg} onChange={handleInputChange} className="w-full border-2 border-gray-200 rounded-xl p-3 text-gray-800 focus:outline-none focus:border-[#0F572B] focus:ring-0 transition-colors" />
+                </div>
+              </div>
 
-            </div>
+              <div className="mt-6 p-5 bg-[#F8FAFC] rounded-xl border border-gray-100">
+                <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase mb-4">IDs de Relación (UUIDs de BD)</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Especie</label>
+                    <input type="text" name="idSpecies" value={formData.idSpecies || ""} onChange={handleInputChange} placeholder="Opcional..." className="w-full border border-gray-200 rounded-lg p-2 text-sm text-gray-800" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Sustrato</label>
+                    <input type="text" name="idSubstrate" value={formData.idSubstrate || ""} onChange={handleInputChange} placeholder="Opcional..." className="w-full border border-gray-200 rounded-lg p-2 text-sm text-gray-800" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-4 mt-8 pt-4 border-t border-gray-100">
+                <button type="button" onClick={closeModal} className="px-6 py-3 text-gray-600 font-bold rounded-xl hover:bg-gray-100 transition-colors">
+                  Cancelar
+                </button>
+                <button type="submit" className="px-6 py-3 bg-[#0F572B] text-white font-bold rounded-xl hover:bg-green-800 transition-all shadow-md active:scale-95">
+                  {editingId ? "Guardar Cambios" : "Crear Lote"}
+                </button>
+              </div>
+            </form>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
