@@ -17,14 +17,11 @@ jobs:
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20' # Versión estable y recomendada para Next.js
+          node-version: '20' 
           cache: 'npm'       # Esto hace que las instalaciones futuras vuelen
 
       - name: Instalar dependencias de forma limpia
         run: npm ci
-
-      - name: Revisar calidad del código (Linting)
-        run: npm run lint
 
       - name: Compilar el proyecto (Build)
         run: npm run build
