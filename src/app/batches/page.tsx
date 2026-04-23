@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Edit, Trash2, AlertCircle, Calendar, Sprout, Layers, Package, Activity, Leaf } from 'lucide-react';
+import { Plus, Edit, Trash2, AlertCircle, Calendar, Sprout, Layers, Package, Activity, Leaf, Building2 } from 'lucide-react';
 
 interface CropBatch {
   id?: string;
@@ -21,20 +21,26 @@ interface Species {
   name: string;
 }
 
-// Nueva interfaz para Sustratos
 interface Substrate {
   idSubstrate: string;
   typeName: string;
 }
 
+interface Supplier {
+  idSupplier: string;
+  nameSupplier: string;
+}
+
 const BATCHES_API_URL = `${process.env.NEXT_PUBLIC_API_URL}/batches`;
 const SPECIES_API_URL = `${process.env.NEXT_PUBLIC_API_URL}/species`;
-const SUBSTRATES_API_URL = `${process.env.NEXT_PUBLIC_API_URL}/substrates`; // Nueva URL
+const SUBSTRATES_API_URL = `${process.env.NEXT_PUBLIC_API_URL}/substrates`;
+const SUPPLIERS_API_URL = `${process.env.NEXT_PUBLIC_API_URL}/suppliers`;
 
 export default function BatchesPage() {
   const [batchesList, setBatchesList] = useState<CropBatch[]>([]);
   const [speciesList, setSpeciesList] = useState<Species[]>([]);
-  const [substratesList, setSubstratesList] = useState<Substrate[]>([]); // Nuevo estado
+  const [substratesList, setSubstratesList] = useState<Substrate[]>([]);
+  const [suppliersList, setSuppliersList] = useState<Supplier[]>([]);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -47,16 +53,17 @@ export default function BatchesPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      // Ahora hacemos 3 peticiones simultáneas
-      const [batchesRes, speciesRes, substratesRes] = await Promise.all([
+      const [batchesRes, speciesRes, substratesRes, suppliersRes] = await Promise.all([
         fetch(BATCHES_API_URL),
         fetch(SPECIES_API_URL),
-        fetch(SUBSTRATES_API_URL) 
+        fetch(SUBSTRATES_API_URL),
+        fetch(SUPPLIERS_API_URL)
       ]);
 
       if (batchesRes.ok) setBatchesList(await batchesRes.json());
       if (speciesRes.ok) setSpeciesList(await speciesRes.json());
       if (substratesRes.ok) setSubstratesList(await substratesRes.json());
+      if (suppliersRes.ok) setSuppliersList(await suppliersRes.json());
       
     } catch (error) {
       console.error("Falló la conexión con el backend:", error);
@@ -73,7 +80,6 @@ export default function BatchesPage() {
     return species ? species.name : "Especie desconocida";
   };
 
-  // Actualizado para buscar en la lista real del backend
   const getSubstrateName = (id: string | null) => {
     if (!id) return "Sin asignar";
     const substrate = substratesList.find(s => s.idSubstrate === id);
@@ -131,9 +137,10 @@ export default function BatchesPage() {
         payload.yieldKg = 0;
       }
       
+      // Limpieza de campos opcionales para evitar strings vacíos en la BD
       if (!payload.endDate) payload.endDate = null;
-      if (!payload.idSpeciesSupplier) payload.idSpeciesSupplier = null;
-      if (!payload.idSubstrateSupplier) payload.idSubstrateSupplier = null;
+      if (!payload.idSpeciesSupplier || payload.idSpeciesSupplier === "") payload.idSpeciesSupplier = null;
+      if (!payload.idSubstrateSupplier || payload.idSubstrateSupplier === "") payload.idSubstrateSupplier = null;
       if (!payload.idUser) payload.idUser = null;
 
       const response = await fetch(url, {
@@ -181,7 +188,9 @@ export default function BatchesPage() {
     setFormData({
       ...batch,
       startDate: batch.startDate ? batch.startDate.substring(0, 16) : "",
-      endDate: batch.endDate ? batch.endDate.substring(0, 16) : ""
+      endDate: batch.endDate ? batch.endDate.substring(0, 16) : "",
+      idSpeciesSupplier: batch.idSpeciesSupplier || "",
+      idSubstrateSupplier: batch.idSubstrateSupplier || ""
     });
     setIsModalOpen(true);
   };
@@ -316,7 +325,6 @@ export default function BatchesPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Sustrato Base *</label>
-                    {/* Select iterando sobre la lista REAL del backend */}
                     <select name="idSubstrate" value={formData.idSubstrate || ""} onChange={handleInputChange} className={`w-full border rounded-lg p-2.5 text-slate-800 focus:outline-none bg-white transition-all ${formErrors.substrate ? 'border-red-500 focus:ring-2 focus:ring-red-200' : 'border-slate-300 focus:border-green-600 focus:ring-2 focus:ring-green-600/20'}`}>
                       <option value="" disabled>Seleccione un sustrato...</option>
                       {substratesList.map(sub => (
@@ -324,6 +332,34 @@ export default function BatchesPage() {
                       ))}
                     </select>
                     {formErrors.substrate && <p className="text-red-500 text-xs mt-1 font-medium flex items-center"><AlertCircle size={12} className="mr-1"/>{formErrors.substrate}</p>}
+                  </div>
+                </div>
+              </div>
+
+              {/* NUEVA SECCIÓN: Trazabilidad de Insumos */}
+              <div className="bg-slate-50 p-5 rounded-xl border border-slate-100">
+                <div className="flex items-center mb-4">
+                  <Building2 size={18} className="text-indigo-600 mr-2" />
+                  <h4 className="font-bold text-slate-700">Trazabilidad de Insumos <span className="text-sm font-normal text-slate-500">(Opcional)</span></h4>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Proveedor de la Especie</label>
+                    <select name="idSpeciesSupplier" value={formData.idSpeciesSupplier || ""} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-white transition-all">
+                      <option value="">No registrar / Desconocido</option>
+                      {suppliersList.map(sup => (
+                        <option key={sup.idSupplier} value={sup.idSupplier}>{sup.nameSupplier}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Proveedor del Sustrato</label>
+                    <select name="idSubstrateSupplier" value={formData.idSubstrateSupplier || ""} onChange={handleInputChange} className="w-full border border-slate-300 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-white transition-all">
+                      <option value="">No registrar / Desconocido</option>
+                      {suppliersList.map(sup => (
+                        <option key={sup.idSupplier} value={sup.idSupplier}>{sup.nameSupplier}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>
