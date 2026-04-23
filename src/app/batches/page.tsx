@@ -21,19 +21,20 @@ interface Species {
   name: string;
 }
 
+// Nueva interfaz para Sustratos
+interface Substrate {
+  idSubstrate: string;
+  typeName: string;
+}
+
 const BATCHES_API_URL = `${process.env.NEXT_PUBLIC_API_URL}/batches`;
 const SPECIES_API_URL = `${process.env.NEXT_PUBLIC_API_URL}/species`;
-
-// MOCK: Sustratos con UUIDs reales para la BD
-const MOCK_SUBSTRATES = [
-  { id: "11111111-1111-1111-1111-111111111111", name: "Paja de Trigo Pasteurizada" },
-  { id: "22222222-2222-2222-2222-222222222222", name: "Aserrín de Roble" },
-  { id: "33333333-3333-3333-3333-333333333333", name: "Fibra de Coco y Cascarilla" }
-];
+const SUBSTRATES_API_URL = `${process.env.NEXT_PUBLIC_API_URL}/substrates`; // Nueva URL
 
 export default function BatchesPage() {
   const [batchesList, setBatchesList] = useState<CropBatch[]>([]);
   const [speciesList, setSpeciesList] = useState<Species[]>([]);
+  const [substratesList, setSubstratesList] = useState<Substrate[]>([]); // Nuevo estado
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -46,13 +47,16 @@ export default function BatchesPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [batchesRes, speciesRes] = await Promise.all([
+      // Ahora hacemos 3 peticiones simultáneas
+      const [batchesRes, speciesRes, substratesRes] = await Promise.all([
         fetch(BATCHES_API_URL),
-        fetch(SPECIES_API_URL)
+        fetch(SPECIES_API_URL),
+        fetch(SUBSTRATES_API_URL) 
       ]);
 
       if (batchesRes.ok) setBatchesList(await batchesRes.json());
       if (speciesRes.ok) setSpeciesList(await speciesRes.json());
+      if (substratesRes.ok) setSubstratesList(await substratesRes.json());
       
     } catch (error) {
       console.error("Falló la conexión con el backend:", error);
@@ -63,17 +67,17 @@ export default function BatchesPage() {
     fetchData();
   }, [fetchData]);
 
-  // Funciones auxiliares para mostrar nombres en lugar de UUIDs
   const getSpeciesName = (id: string | null) => {
     if (!id) return "Sin asignar";
     const species = speciesList.find(s => s.idSpecies === id);
     return species ? species.name : "Especie desconocida";
   };
 
+  // Actualizado para buscar en la lista real del backend
   const getSubstrateName = (id: string | null) => {
     if (!id) return "Sin asignar";
-    const substrate = MOCK_SUBSTRATES.find(s => s.id === id);
-    return substrate ? substrate.name : "Sustrato desconocido";
+    const substrate = substratesList.find(s => s.idSubstrate === id);
+    return substrate ? substrate.typeName : "Sustrato desconocido";
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -200,7 +204,6 @@ export default function BatchesPage() {
         </button>
       </header>
 
-      {/* Grid de Lotes Rediseñado */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {batchesList.length === 0 ? (
           <p className="text-slate-500 col-span-full">No hay lotes de producción registrados.</p>
@@ -208,7 +211,6 @@ export default function BatchesPage() {
           batchesList.map((batch) => (
             <div key={batch.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow relative flex flex-col">
               
-              {/* Header de la tarjeta */}
               <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
                 <div>
                   <div className={`inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold tracking-widest uppercase mb-2 ${batch.status === 'ACTIVO' ? 'bg-green-100 text-green-700' : batch.status === 'COSECHADO' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>
@@ -225,7 +227,6 @@ export default function BatchesPage() {
                 </div>
               </div>
 
-              {/* Cuerpo de la tarjeta */}
               <div className="p-5 space-y-4 flex-grow">
                 <div className="flex items-start">
                   <div className="w-8 h-8 rounded bg-green-50 flex items-center justify-center mr-3 flex-shrink-0 mt-0.5">
@@ -258,7 +259,6 @@ export default function BatchesPage() {
                 </div>
               </div>
 
-              {/* Footer de Rendimiento (Si está cosechado) */}
               {batch.status === 'COSECHADO' && (
                 <div className="bg-slate-50 p-4 border-t border-slate-100 flex justify-between items-center">
                   <span className="text-xs font-bold text-slate-500 uppercase">Rendimiento Final</span>
@@ -270,7 +270,6 @@ export default function BatchesPage() {
         )}
       </div>
 
-      {/* MODAL REDISEÑADO */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-opacity">
           <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto transform transition-all">
@@ -279,7 +278,6 @@ export default function BatchesPage() {
             </h2>
             <form onSubmit={handleSubmit} className="space-y-6">
               
-              {/* Bloque: Tiempos del Lote */}
               <div className="bg-slate-50 p-5 rounded-xl border border-slate-100">
                 <div className="flex items-center mb-4">
                   <Calendar size={18} className="text-blue-500 mr-2" />
@@ -300,7 +298,6 @@ export default function BatchesPage() {
                 )}
               </div>
 
-              {/* Bloque: Configuración Biológica */}
               <div className="bg-slate-50 p-5 rounded-xl border border-slate-100">
                 <div className="flex items-center mb-4">
                   <Sprout size={18} className="text-green-600 mr-2" />
@@ -319,10 +316,11 @@ export default function BatchesPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-500 uppercase mb-1">Sustrato Base *</label>
+                    {/* Select iterando sobre la lista REAL del backend */}
                     <select name="idSubstrate" value={formData.idSubstrate || ""} onChange={handleInputChange} className={`w-full border rounded-lg p-2.5 text-slate-800 focus:outline-none bg-white transition-all ${formErrors.substrate ? 'border-red-500 focus:ring-2 focus:ring-red-200' : 'border-slate-300 focus:border-green-600 focus:ring-2 focus:ring-green-600/20'}`}>
                       <option value="" disabled>Seleccione un sustrato...</option>
-                      {MOCK_SUBSTRATES.map(sub => (
-                        <option key={sub.id} value={sub.id}>{sub.name}</option>
+                      {substratesList.map(sub => (
+                        <option key={sub.idSubstrate} value={sub.idSubstrate}>{sub.typeName}</option>
                       ))}
                     </select>
                     {formErrors.substrate && <p className="text-red-500 text-xs mt-1 font-medium flex items-center"><AlertCircle size={12} className="mr-1"/>{formErrors.substrate}</p>}
@@ -330,7 +328,6 @@ export default function BatchesPage() {
                 </div>
               </div>
 
-              {/* Bloque Condicional: Cierre y Producción */}
               {editingId !== null && (
                 <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100">
                   <div className="flex items-center mb-4">
@@ -357,7 +354,6 @@ export default function BatchesPage() {
                 </div>
               )}
 
-              {/* Botones */}
               <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-slate-100">
                 <button type="button" onClick={closeModal} className="px-5 py-2.5 font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
                   Cancelar
