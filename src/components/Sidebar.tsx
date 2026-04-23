@@ -6,7 +6,8 @@ import {
   Layers, 
   BarChart3, 
   LogOut,
-  Package 
+  Package,
+  Building2
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -18,6 +19,7 @@ export default function Sidebar() {
     { name: 'Panel Principal', path: '/', icon: LayoutDashboard },
     { name: 'Gestión de Especies', path: '/species', icon: Sprout },
     { name: 'Gestión de Sustratos', path: '/substrates', icon: Package },
+    { name: 'Gestión de Proveedores', path: '/suppliers', icon: Building2 },
     { name: 'Lotes Activos', path: '/batches', icon: Layers },
     { name: 'Analítica Histórica', path: '/analytics', icon: BarChart3 },
   ];
