@@ -1,0 +1,453 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  Thermometer,
+  Droplets,
+  Wind,
+  Activity,
+  Calendar,
+  Leaf,
+  Package,
+  AlertCircle,
+  RefreshCw,
+} from "lucide-react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceArea,
+  CartesianGrid,
+} from "recharts";
+import {
+  TelemetryReading,
+  SpeciesThresholds,
+  classifyReading,
+  STATUS_COLORS,
+  ReadingStatus,
+  getRange,
+} from "@/lib/telemetry";
+import { useLiveTelemetry } from "@/lib/useLiveTelemetry";
+
+interface CropBatch {
+  id: string;
+  idSpecies: string | null;
+  idSubstrate: string | null;
+  startDate: string;
+  endDate: string | null;
+  status: string;
+  yieldKg: number;
+}
+
+interface Species extends SpeciesThresholds {
+  idSpecies: string;
+  name: string;
+}
+
+interface Substrate {
+  idSubstrate: string;
+  typeName: string;
+}
+
+const BATCHES_API = `${process.env.NEXT_PUBLIC_API_URL}/batches`;
+const SPECIES_API = `${process.env.NEXT_PUBLIC_API_URL}/species`;
+const SUBSTRATES_API = `${process.env.NEXT_PUBLIC_API_URL}/substrates`;
+
+type Variable = "temperature" | "humidity" | "co2";
+type RangePreset = "live" | "24h" | "7d" | "30d";
+
+const VARIABLE_META: Record<Variable, { label: string; unit: string; color: string; icon: typeof Thermometer }> = {
+  temperature: { label: "Temperatura", unit: "°C", color: "#f97316", icon: Thermometer },
+  humidity: { label: "Humedad", unit: "%", color: "#3b82f6", icon: Droplets },
+  co2: { label: "CO₂", unit: "ppm", color: "#16a34a", icon: Wind },
+};
+
+function thresholdsFor(variable: Variable, species: Species): { min: number; max: number } {
+  switch (variable) {
+    case "temperature": return { min: species.minTemperature, max: species.maxTemperature };
+    case "humidity": return { min: species.minHumidity, max: species.maxHumidity };
+    case "co2": return { min: species.minCo2, max: species.maxCo2 };
+  }
+}
+
+function formatTimestamp(iso: string): string {
+  return new Date(iso).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function timeSince(date: Date | null): string {
+  if (!date) return "—";
+  const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+  if (seconds < 60) return `hace ${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `hace ${minutes}m`;
+  return `hace ${Math.floor(minutes / 60)}h`;
+}
+
+export default function BatchDetailClient({ batchId }: { batchId: string }) {
+  const [batch, setBatch] = useState<CropBatch | null>(null);
+  const [species, setSpecies] = useState<Species | null>(null);
+  const [substrate, setSubstrate] = useState<Substrate | null>(null);
+  const [loadingMeta, setLoadingMeta] = useState(true);
+  const [metaError, setMetaError] = useState<string | null>(null);
+
+  const [selectedVariable, setSelectedVariable] = useState<Variable>("temperature");
+  const [rangePreset, setRangePreset] = useState<RangePreset>("live");
+  const [historical, setHistorical] = useState<TelemetryReading[]>([]);
+  const [historicalLoading, setHistoricalLoading] = useState(false);
+
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => t + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoadingMeta(true);
+        const [batchesRes, speciesRes, substratesRes] = await Promise.all([
+          fetch(BATCHES_API),
+          fetch(SPECIES_API),
+          fetch(SUBSTRATES_API),
+        ]);
+        if (!batchesRes.ok || !speciesRes.ok) throw new Error("Error cargando metadata");
+        const batches: CropBatch[] = await batchesRes.json();
+        const speciesList: Species[] = await speciesRes.json();
+        const substratesList: Substrate[] = substratesRes.ok ? await substratesRes.json() : [];
+
+        if (cancelled) return;
+        const found = batches.find((b) => b.id === batchId) ?? null;
+        setBatch(found);
+        if (found?.idSpecies) {
+          setSpecies(speciesList.find((s) => s.idSpecies === found.idSpecies) ?? null);
+        }
+        if (found?.idSubstrate) {
+          setSubstrate(substratesList.find((s) => s.idSubstrate === found.idSubstrate) ?? null);
+        }
+        setMetaError(null);
+      } catch (err) {
+        if (!cancelled) setMetaError(err instanceof Error ? err.message : "Error desconocido");
+      } finally {
+        if (!cancelled) setLoadingMeta(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [batchId]);
+
+  const live = useLiveTelemetry(batchId, { intervalMs: 5000, recentLimit: 60, enabled: rangePreset === "live" });
+
+  const loadHistorical = useCallback(async (preset: Exclude<RangePreset, "live">) => {
+    const to = new Date();
+    const from = new Date(to);
+    if (preset === "24h") from.setHours(from.getHours() - 24);
+    if (preset === "7d") from.setDate(from.getDate() - 7);
+    if (preset === "30d") from.setDate(from.getDate() - 30);
+    setHistoricalLoading(true);
+    try {
+      const data = await getRange(batchId, from, to);
+      setHistorical(data);
+    } catch {
+      setHistorical([]);
+    } finally {
+      setHistoricalLoading(false);
+    }
+  }, [batchId]);
+
+  useEffect(() => {
+    if (rangePreset !== "live") loadHistorical(rangePreset);
+  }, [rangePreset, loadHistorical]);
+
+  const series = rangePreset === "live" ? live.recent : historical;
+  const chartData = useMemo(() =>
+    series.map((r) => ({
+      ts: r.recordedAt,
+      tsLabel: formatTimestamp(r.recordedAt),
+      temperature: r.temperature,
+      humidity: r.humidity,
+      co2: r.co2,
+    })), [series]);
+
+  const liveStatus = useMemo(() => {
+    if (!live.latest || !species) return null;
+    return classifyReading(live.latest, species);
+  }, [live.latest, species]);
+
+  if (loadingMeta) {
+    return (
+      <div className="p-8 text-slate-800 max-w-7xl mx-auto">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 w-64 bg-slate-200 rounded"></div>
+          <div className="h-32 bg-slate-100 rounded-2xl"></div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="h-40 bg-slate-100 rounded-2xl"></div>
+            <div className="h-40 bg-slate-100 rounded-2xl"></div>
+            <div className="h-40 bg-slate-100 rounded-2xl"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!batch) {
+    return (
+      <div className="p-8 text-slate-800 max-w-7xl mx-auto">
+        <Link href="/batches" className="text-slate-500 hover:text-slate-700 inline-flex items-center mb-6">
+          <ArrowLeft size={16} className="mr-2" /> Volver a Lotes
+        </Link>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-red-700">
+          <p className="font-bold">Lote no encontrado</p>
+          {metaError && <p className="text-sm mt-1">{metaError}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-8 text-slate-800 max-w-7xl mx-auto">
+      <Link href="/batches" className="text-slate-500 hover:text-slate-700 inline-flex items-center mb-4 text-sm font-medium">
+        <ArrowLeft size={16} className="mr-2" /> Volver a Lotes
+      </Link>
+
+      <header className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold tracking-widest uppercase ${
+                batch.status === "ACTIVO" ? "bg-green-100 text-green-700" :
+                batch.status === "COSECHADO" ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"
+              }`}>
+                <Activity size={12} className="mr-1.5" />{batch.status}
+              </span>
+              {liveStatus && rangePreset === "live" && (
+                <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold tracking-widest uppercase ${STATUS_COLORS[liveStatus.worstStatus].bg} ${STATUS_COLORS[liveStatus.worstStatus].text}`}>
+                  Telemetría · {liveStatus.worstStatus}
+                </span>
+              )}
+            </div>
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+              Lote {batch.id.substring(0, 6).toUpperCase()}
+            </h1>
+            <p className="text-slate-500 font-medium text-sm mt-1">
+              Telemetría en tiempo real y análisis histórico del ciclo.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+            <RefreshCw size={14} className={live.loading ? "animate-spin" : ""} />
+            <span>Última actualización: {timeSince(live.lastUpdatedAt)}</span>
+            <span suppressHydrationWarning className="hidden">{tick}</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100">
+          <div className="flex items-start">
+            <div className="w-9 h-9 rounded bg-green-50 flex items-center justify-center mr-3 flex-shrink-0">
+              <Leaf size={16} className="text-green-600" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Especie</p>
+              <p className="text-sm font-semibold text-slate-800">{species?.name ?? "Sin asignar"}</p>
+            </div>
+          </div>
+          <div className="flex items-start">
+            <div className="w-9 h-9 rounded bg-amber-50 flex items-center justify-center mr-3 flex-shrink-0">
+              <Package size={16} className="text-amber-600" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Sustrato</p>
+              <p className="text-sm font-semibold text-slate-800">{substrate?.typeName ?? "Sin asignar"}</p>
+            </div>
+          </div>
+          <div className="flex items-start">
+            <div className="w-9 h-9 rounded bg-blue-50 flex items-center justify-center mr-3 flex-shrink-0">
+              <Calendar size={16} className="text-blue-500" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Inicio de Ciclo</p>
+              <p className="text-sm font-semibold text-slate-800">{new Date(batch.startDate).toLocaleDateString()}</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {!species && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-start">
+          <AlertCircle size={18} className="text-amber-600 mr-3 mt-0.5 flex-shrink-0" />
+          <div className="text-sm text-amber-800">
+            <p className="font-bold">Especie no asignada</p>
+            <p>Sin rangos óptimos no se puede clasificar la telemetría. Asigna una especie en la edición del lote.</p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <KpiCard variable="temperature" reading={live.latest} status={liveStatus?.tempStatus ?? null} species={species} />
+        <KpiCard variable="humidity" reading={live.latest} status={liveStatus?.humStatus ?? null} species={species} />
+        <KpiCard variable="co2" reading={live.latest} status={liveStatus?.co2Status ?? null} species={species} />
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <div className="flex gap-2 flex-wrap">
+            {(Object.keys(VARIABLE_META) as Variable[]).map((v) => {
+              const Icon = VARIABLE_META[v].icon;
+              const active = selectedVariable === v;
+              return (
+                <button
+                  key={v}
+                  onClick={() => setSelectedVariable(v)}
+                  className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+                    active ? "bg-[#1e5631] text-white" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                  }`}
+                >
+                  <Icon size={14} className="mr-2" />
+                  {VARIABLE_META[v].label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
+            {(["live", "24h", "7d", "30d"] as RangePreset[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => setRangePreset(p)}
+                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${
+                  rangePreset === p ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {p === "live" ? "EN VIVO" : p.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="w-full h-80">
+          {historicalLoading || (rangePreset === "live" && live.loading && live.recent.length === 0) ? (
+            <div className="h-full flex items-center justify-center text-slate-400 text-sm">Cargando datos…</div>
+          ) : chartData.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-slate-400 text-sm">
+              <AlertCircle size={28} className="mb-2" />
+              Sin lecturas en este rango.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis
+                  dataKey="tsLabel"
+                  tick={{ fill: "#94a3b8", fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  minTickGap={40}
+                />
+                <YAxis
+                  tick={{ fill: "#94a3b8", fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  unit={VARIABLE_META[selectedVariable].unit}
+                  domain={["auto", "auto"]}
+                />
+                {species && (
+                  <ReferenceArea
+                    y1={thresholdsFor(selectedVariable, species).min}
+                    y2={thresholdsFor(selectedVariable, species).max}
+                    fill="#22c55e"
+                    fillOpacity={0.07}
+                    stroke="#22c55e"
+                    strokeOpacity={0.25}
+                    strokeDasharray="3 3"
+                  />
+                )}
+                <Tooltip
+                  contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }}
+                  labelStyle={{ color: "#475569", fontWeight: 600 }}
+                  formatter={(value) => {
+                    const num = typeof value === "number" ? value : parseFloat(String(value));
+                    return [`${num.toFixed(2)} ${VARIABLE_META[selectedVariable].unit}`, VARIABLE_META[selectedVariable].label];
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey={selectedVariable}
+                  stroke={VARIABLE_META[selectedVariable].color}
+                  strokeWidth={2.5}
+                  dot={false}
+                  activeDot={{ r: 5 }}
+                  isAnimationActive={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {species && (
+          <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            <div className="flex items-center">
+              <span className="w-3 h-3 rounded-sm mr-2 border border-green-500" style={{ backgroundColor: "rgba(34,197,94,0.07)" }}></span>
+              Rango óptimo de la especie: {thresholdsFor(selectedVariable, species).min} – {thresholdsFor(selectedVariable, species).max} {VARIABLE_META[selectedVariable].unit}
+            </div>
+            <span className="font-medium">{chartData.length} lecturas</span>
+          </div>
+        )}
+
+        {live.error && rangePreset === "live" && (
+          <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700 flex items-center">
+            <AlertCircle size={14} className="mr-2" /> Error consultando telemetría: {live.error}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function KpiCard({
+  variable,
+  reading,
+  status,
+  species,
+}: {
+  variable: Variable;
+  reading: TelemetryReading | null;
+  status: ReadingStatus | null;
+  species: Species | null;
+}) {
+  const meta = VARIABLE_META[variable];
+  const Icon = meta.icon;
+  const value = reading ? reading[variable] : null;
+  const statusStyle = status ? STATUS_COLORS[status] : null;
+  const range = species ? thresholdsFor(variable, species) : null;
+
+  return (
+    <div className={`bg-white rounded-2xl border shadow-sm p-6 transition-shadow ${statusStyle ? `border-slate-200 ${status === "CRITICAL" ? "ring-2 " + statusStyle.ring : ""}` : "border-slate-200"}`}>
+      <div className="flex justify-between items-start mb-4">
+        <div className="flex items-center">
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center mr-3" style={{ backgroundColor: `${meta.color}15` }}>
+            <Icon size={18} style={{ color: meta.color }} />
+          </div>
+          <span className="text-sm font-bold text-slate-700">{meta.label}</span>
+        </div>
+        {statusStyle && (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold tracking-widest uppercase ${statusStyle.bg} ${statusStyle.text}`}>
+            {status}
+          </span>
+        )}
+      </div>
+      <div className="flex items-baseline">
+        <span className="text-4xl font-extrabold text-slate-900">
+          {value !== null ? value.toFixed(1) : "—"}
+        </span>
+        <span className="text-slate-400 text-sm font-semibold ml-2">{meta.unit}</span>
+      </div>
+      {range && (
+        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-3">
+          Óptimo: {range.min} – {range.max} {meta.unit}
+        </p>
+      )}
+    </div>
+  );
+}
