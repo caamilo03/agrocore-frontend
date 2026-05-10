@@ -80,6 +80,7 @@ export function formatReadingDateTime(iso: string): string {
 export type BucketGranularity = "raw" | "minute" | "hour" | "day";
 
 export interface BucketedReading {
+  /** ISO instant (UTC) representing the START of the bucket in Colombian local time. For raw, equals reading time. */
   bucketStart: string;
   temperature: number;
   humidity: number;
@@ -87,11 +88,48 @@ export interface BucketedReading {
   count: number;
 }
 
+// America/Bogota is UTC-5 year-round (Colombia does not observe DST).
+const COLOMBIA_UTC_OFFSET_HOURS = 5;
+
+/** Pads a number to 2 digits ("3" -> "03"). */
+function pad2(n: number): string {
+  return n < 10 ? "0" + n : String(n);
+}
+
+/** Extracts Colombian-local Y/M/D/h/m components from an ISO instant. */
+function colombiaParts(iso: string): { y: number; mo: number; d: number; h: number; mi: number } {
+  const d = new Date(iso);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: DISPLAY_TZ,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(d).reduce<Record<string, string>>((acc, p) => {
+    if (p.type !== "literal") acc[p.type] = p.value;
+    return acc;
+  }, {});
+  return {
+    y: Number(parts.year),
+    mo: Number(parts.month),
+    d: Number(parts.day),
+    // Intl can emit "24" for midnight in some locales — normalize to 0.
+    h: Number(parts.hour) % 24,
+    mi: Number(parts.minute),
+  };
+}
+
 /**
- * Aggregates raw readings into time buckets by averaging. The bucket key is
- * the ISO of the bucket start (truncated to the given granularity, in the
- * display timezone so the labels later look natural). "raw" returns one
- * bucket per input reading.
+ * Produces an ISO instant (UTC) corresponding to the START of the bucket in
+ * Colombian local time. e.g. for hour bucket "2026-05-10 18 Colombia",
+ * returns "2026-05-10T23:00:00.000Z".
+ */
+function bucketStartIso(y: number, mo: number, d: number, h: number, mi: number): string {
+  return new Date(Date.UTC(y, mo - 1, d, h + COLOMBIA_UTC_OFFSET_HOURS, mi)).toISOString();
+}
+
+/**
+ * Aggregates raw readings into time buckets by averaging. Bucket boundaries
+ * are aligned to Colombian local time so the labels match what the user
+ * sees on the clock. "raw" returns one bucket per input reading (identity).
  */
 export function aggregateReadings(readings: TelemetryReading[], granularity: BucketGranularity): BucketedReading[] {
   if (granularity === "raw") {
@@ -104,35 +142,34 @@ export function aggregateReadings(readings: TelemetryReading[], granularity: Buc
     }));
   }
 
-  const groups = new Map<string, { t: number; h: number; c: number; n: number; first: string }>();
+  const groups = new Map<string, { key: string; t: number; h: number; c: number; n: number; start: string }>();
   for (const r of readings) {
-    const d = new Date(r.recordedAt);
-    // Build a stable bucket key using Colombian-local fields so day boundaries match the user.
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: DISPLAY_TZ,
-      year: "numeric", month: "2-digit", day: "2-digit",
-      hour: "2-digit", minute: "2-digit", hour12: false,
-    }).formatToParts(d).reduce<Record<string, string>>((acc, p) => {
-      if (p.type !== "literal") acc[p.type] = p.value;
-      return acc;
-    }, {});
+    const { y, mo, d, h, mi } = colombiaParts(r.recordedAt);
     let key: string;
-    if (granularity === "minute") key = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
-    else if (granularity === "hour") key = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}`;
-    else key = `${parts.year}-${parts.month}-${parts.day}`;
+    let start: string;
+    if (granularity === "minute") {
+      key = `${y}-${pad2(mo)}-${pad2(d)}T${pad2(h)}:${pad2(mi)}`;
+      start = bucketStartIso(y, mo, d, h, mi);
+    } else if (granularity === "hour") {
+      key = `${y}-${pad2(mo)}-${pad2(d)}T${pad2(h)}`;
+      start = bucketStartIso(y, mo, d, h, 0);
+    } else {
+      key = `${y}-${pad2(mo)}-${pad2(d)}`;
+      start = bucketStartIso(y, mo, d, 0, 0);
+    }
 
     const entry = groups.get(key);
     if (entry) {
       entry.t += r.temperature; entry.h += r.humidity; entry.c += r.co2; entry.n++;
     } else {
-      groups.set(key, { t: r.temperature, h: r.humidity, c: r.co2, n: 1, first: r.recordedAt });
+      groups.set(key, { key, t: r.temperature, h: r.humidity, c: r.co2, n: 1, start });
     }
   }
 
-  return Array.from(groups.entries())
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([, v]) => ({
-      bucketStart: v.first,
+  return Array.from(groups.values())
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    .map((v) => ({
+      bucketStart: v.start,
       temperature: v.t / v.n,
       humidity: v.h / v.n,
       co2: v.c / v.n,

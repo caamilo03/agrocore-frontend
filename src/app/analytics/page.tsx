@@ -234,6 +234,19 @@ export default function AnalyticsPage() {
         </div>
       )}
 
+      {!loading && readings.length > 0 && chartData.length > 0 && (() => {
+        const expected = appliedPreset === "24h" ? 24 : appliedPreset === "7d" ? 7 : 30;
+        if (chartData.length >= expected / 2) return null;
+        return (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-start text-sm text-amber-800">
+            <AlertCircle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+            <span>
+              Datos parciales: el rango solicita {expected} {appliedPreset === "24h" ? "horas" : "días"}, pero las {readings.length} lecturas recibidas sólo cubren {chartData.length}. El endpoint <code className="font-mono">/range</code> está topando en 5000 lecturas y descartando el resto del periodo.
+            </span>
+          </div>
+        );
+      })()}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <ChartCard
@@ -405,7 +418,15 @@ function ChartCard({ title, unit, color, dataKey, data, average, band, loading }
                   return [`${num.toFixed(2)} ${unit}`, title];
                 }}
               />
-              <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} isAnimationActive={false} />
+              <Line
+                type="monotone"
+                dataKey={dataKey}
+                stroke={color}
+                strokeWidth={2.5}
+                dot={data.length <= 30 ? { r: 3, fill: color, strokeWidth: 0 } : false}
+                activeDot={{ r: 5 }}
+                isAnimationActive={false}
+              />
             </LineChart>
           </ResponsiveContainer>
         )}

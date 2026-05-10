@@ -177,6 +177,7 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
   }, [rangePreset, loadHistorical]);
 
   const series = rangePreset === "live" ? live.recent : historical;
+  const expectedBuckets: Record<RangePreset, number> = { live: 1, "24h": 24, "7d": 7, "30d": 30 };
   const chartData = useMemo(() => {
     const buckets = aggregateReadings(series, granularityFor(rangePreset));
     return buckets.map((b) => ({
@@ -399,7 +400,9 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
                   dataKey={selectedVariable}
                   stroke={VARIABLE_META[selectedVariable].color}
                   strokeWidth={2.5}
-                  dot={false}
+                  dot={rangePreset !== "live" && chartData.length <= 30
+                    ? { r: 3, fill: VARIABLE_META[selectedVariable].color, strokeWidth: 0 }
+                    : false}
                   activeDot={{ r: 5 }}
                   isAnimationActive={false}
                 />
@@ -418,6 +421,15 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
               {rangePreset === "live"
                 ? `${chartData.length} lecturas`
                 : `${chartData.length} ${rangePreset === "24h" ? "horas" : "días"} · ${series.length} lecturas`}
+            </span>
+          </div>
+        )}
+
+        {rangePreset !== "live" && !historicalLoading && chartData.length > 0 && chartData.length < expectedBuckets[rangePreset] / 2 && (
+          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 flex items-start">
+            <AlertCircle size={14} className="mr-2 mt-0.5 flex-shrink-0" />
+            <span>
+              Datos parciales: el rango solicita {expectedBuckets[rangePreset]} {rangePreset === "24h" ? "horas" : "días"}, pero el backend devolvió lecturas que cubren sólo {chartData.length}. Esto suele ocurrir cuando el endpoint <code className="font-mono">/range</code> alcanza su tope de 5000 lecturas y descarta el resto del periodo.
             </span>
           </div>
         )}
