@@ -31,6 +31,11 @@ import {
   STATUS_COLORS,
   ReadingStatus,
   getRange,
+  aggregateReadings,
+  formatReadingTime,
+  formatReadingDate,
+  formatReadingDateTime,
+  BucketGranularity,
 } from "@/lib/telemetry";
 import { useLiveTelemetry } from "@/lib/useLiveTelemetry";
 
@@ -75,8 +80,16 @@ function thresholdsFor(variable: Variable, species: Species): { min: number; max
   }
 }
 
-function formatTimestamp(iso: string): string {
-  return new Date(iso).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+function granularityFor(preset: RangePreset): BucketGranularity {
+  if (preset === "live") return "raw";
+  if (preset === "24h") return "hour";
+  return "day";
+}
+
+function labelFor(iso: string, preset: RangePreset): string {
+  if (preset === "live") return formatReadingTime(iso);
+  if (preset === "24h") return new Date(iso).toLocaleTimeString("es-CO", { timeZone: "America/Bogota", hour: "2-digit", minute: "2-digit" });
+  return formatReadingDate(iso);
 }
 
 function timeSince(date: Date | null): string {
@@ -164,14 +177,18 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
   }, [rangePreset, loadHistorical]);
 
   const series = rangePreset === "live" ? live.recent : historical;
-  const chartData = useMemo(() =>
-    series.map((r) => ({
-      ts: r.recordedAt,
-      tsLabel: formatTimestamp(r.recordedAt),
-      temperature: r.temperature,
-      humidity: r.humidity,
-      co2: r.co2,
-    })), [series]);
+  const chartData = useMemo(() => {
+    const buckets = aggregateReadings(series, granularityFor(rangePreset));
+    return buckets.map((b) => ({
+      ts: b.bucketStart,
+      tsLabel: labelFor(b.bucketStart, rangePreset),
+      tsTooltip: rangePreset === "live" ? formatReadingTime(b.bucketStart) : formatReadingDateTime(b.bucketStart),
+      temperature: b.temperature,
+      humidity: b.humidity,
+      co2: b.co2,
+      count: b.count,
+    }));
+  }, [series, rangePreset]);
 
   const liveStatus = useMemo(() => {
     if (!live.latest || !species) return null;
@@ -366,6 +383,12 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
                 <Tooltip
                   contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }}
                   labelStyle={{ color: "#475569", fontWeight: 600 }}
+                  labelFormatter={(_, payload) => {
+                    const item = payload?.[0]?.payload as { tsTooltip?: string; count?: number } | undefined;
+                    if (!item) return "";
+                    const suffix = item.count && item.count > 1 ? ` · ${item.count} lecturas` : "";
+                    return (item.tsTooltip ?? "") + suffix;
+                  }}
                   formatter={(value) => {
                     const num = typeof value === "number" ? value : parseFloat(String(value));
                     return [`${num.toFixed(2)} ${VARIABLE_META[selectedVariable].unit}`, VARIABLE_META[selectedVariable].label];
@@ -391,7 +414,11 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
               <span className="w-3 h-3 rounded-sm mr-2 border border-green-500" style={{ backgroundColor: "rgba(34,197,94,0.07)" }}></span>
               Rango óptimo de la especie: {thresholdsFor(selectedVariable, species).min} – {thresholdsFor(selectedVariable, species).max} {VARIABLE_META[selectedVariable].unit}
             </div>
-            <span className="font-medium">{chartData.length} lecturas</span>
+            <span className="font-medium">
+              {rangePreset === "live"
+                ? `${chartData.length} lecturas`
+                : `${chartData.length} ${rangePreset === "24h" ? "horas" : "días"} · ${series.length} lecturas`}
+            </span>
           </div>
         )}
 

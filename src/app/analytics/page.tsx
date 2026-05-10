@@ -19,6 +19,11 @@ import {
   STATUS_COLORS,
   ReadingStatus,
   getRange,
+  aggregateReadings,
+  formatReadingDate,
+  formatReadingDateTime,
+  BucketGranularity,
+  DISPLAY_TZ,
 } from "@/lib/telemetry";
 
 interface CropBatch {
@@ -53,11 +58,16 @@ function presetToFromTo(preset: RangePreset): { from: Date; to: Date } {
   return { from, to };
 }
 
-function fmtTs(iso: string, preset: RangePreset): string {
-  const d = new Date(iso);
-  if (preset === "24h") return d.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
-  return d.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit" }) + " " +
-    d.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+function granularityFor(preset: RangePreset): BucketGranularity {
+  if (preset === "24h") return "hour";
+  return "day";
+}
+
+function fmtBucketLabel(iso: string, preset: RangePreset): string {
+  if (preset === "24h") {
+    return new Date(iso).toLocaleTimeString("es-CO", { timeZone: DISPLAY_TZ, hour: "2-digit", minute: "2-digit" });
+  }
+  return formatReadingDate(iso);
 }
 
 function avg(values: number[]): number | null {
@@ -149,13 +159,17 @@ export default function AnalyticsPage() {
     ? speciesList.find((s) => s.idSpecies === selectedBatch.idSpecies) ?? null
     : null;
 
-  const chartData = useMemo(() =>
-    readings.map((r) => ({
-      tsLabel: fmtTs(r.recordedAt, appliedPreset),
-      temperature: r.temperature,
-      humidity: r.humidity,
-      co2: r.co2,
-    })), [readings, appliedPreset]);
+  const chartData = useMemo(() => {
+    const buckets = aggregateReadings(readings, granularityFor(appliedPreset));
+    return buckets.map((b) => ({
+      tsLabel: fmtBucketLabel(b.bucketStart, appliedPreset),
+      tsTooltip: formatReadingDateTime(b.bucketStart),
+      temperature: b.temperature,
+      humidity: b.humidity,
+      co2: b.co2,
+      count: b.count,
+    }));
+  }, [readings, appliedPreset]);
 
   const averages = useMemo(() => ({
     temperature: avg(readings.map((r) => r.temperature)),
@@ -283,7 +297,7 @@ export default function AnalyticsPage() {
                     </span>
                     <span className="text-slate-700">
                       <span className="font-semibold">{a.value.toFixed(1)}</span>
-                      <span className="text-slate-400"> · {new Date(a.recordedAt).toLocaleString("es-CO")}</span>
+                      <span className="text-slate-400"> · {formatReadingDateTime(a.recordedAt)}</span>
                     </span>
                   </li>
                 ))}
@@ -329,7 +343,7 @@ interface ChartCardProps {
   unit: string;
   color: string;
   dataKey: "temperature" | "humidity" | "co2";
-  data: Array<{ tsLabel: string; temperature: number; humidity: number; co2: number }>;
+  data: Array<{ tsLabel: string; tsTooltip: string; temperature: number; humidity: number; co2: number; count: number }>;
   average: number | null;
   band: { min: number; max: number } | null;
   loading: boolean;
@@ -379,6 +393,13 @@ function ChartCard({ title, unit, color, dataKey, data, average, band, loading }
               )}
               <Tooltip
                 contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }}
+                labelStyle={{ color: "#475569", fontWeight: 600 }}
+                labelFormatter={(_, payload) => {
+                  const item = payload?.[0]?.payload as { tsTooltip?: string; count?: number } | undefined;
+                  if (!item) return "";
+                  const suffix = item.count && item.count > 1 ? ` · ${item.count} lecturas` : "";
+                  return (item.tsTooltip ?? "") + suffix;
+                }}
                 formatter={(value) => {
                   const num = typeof value === "number" ? value : parseFloat(String(value));
                   return [`${num.toFixed(2)} ${unit}`, title];

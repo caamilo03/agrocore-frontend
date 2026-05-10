@@ -40,15 +40,104 @@ function toNumber(value: number | string): number {
   return typeof value === "number" ? value : parseFloat(value);
 }
 
+/**
+ * Backend serializes LocalDateTime without timezone marker (the VPS clock is
+ * UTC, but the JSON looks like "2026-05-06T23:20:00.123456"). Browsers parse
+ * that as local time, so we explicitly append "Z" to make it UTC. Combined
+ * with toLocaleString({ timeZone: "America/Bogota" }) downstream, displays
+ * end up in Colombian time regardless of the user's machine.
+ */
+export function normalizeRecordedAt(iso: string): string {
+  if (/[Z]|[+-]\d{2}:?\d{2}$/.test(iso)) return iso;
+  return iso + "Z";
+}
+
 function normalize(raw: RawReading): TelemetryReading {
   return {
     id: raw.id,
     idCropBatch: raw.idCropBatch,
-    recordedAt: raw.recordedAt,
+    recordedAt: normalizeRecordedAt(raw.recordedAt),
     temperature: toNumber(raw.temperature),
     humidity: toNumber(raw.humidity),
     co2: toNumber(raw.co2),
   };
+}
+
+export const DISPLAY_TZ = "America/Bogota";
+
+export function formatReadingTime(iso: string, opts?: Intl.DateTimeFormatOptions): string {
+  return new Date(iso).toLocaleTimeString("es-CO", { timeZone: DISPLAY_TZ, hour: "2-digit", minute: "2-digit", second: "2-digit", ...opts });
+}
+
+export function formatReadingDate(iso: string, opts?: Intl.DateTimeFormatOptions): string {
+  return new Date(iso).toLocaleDateString("es-CO", { timeZone: DISPLAY_TZ, day: "2-digit", month: "2-digit", ...opts });
+}
+
+export function formatReadingDateTime(iso: string): string {
+  return formatReadingDate(iso) + " " + new Date(iso).toLocaleTimeString("es-CO", { timeZone: DISPLAY_TZ, hour: "2-digit", minute: "2-digit" });
+}
+
+export type BucketGranularity = "raw" | "minute" | "hour" | "day";
+
+export interface BucketedReading {
+  bucketStart: string;
+  temperature: number;
+  humidity: number;
+  co2: number;
+  count: number;
+}
+
+/**
+ * Aggregates raw readings into time buckets by averaging. The bucket key is
+ * the ISO of the bucket start (truncated to the given granularity, in the
+ * display timezone so the labels later look natural). "raw" returns one
+ * bucket per input reading.
+ */
+export function aggregateReadings(readings: TelemetryReading[], granularity: BucketGranularity): BucketedReading[] {
+  if (granularity === "raw") {
+    return readings.map((r) => ({
+      bucketStart: r.recordedAt,
+      temperature: r.temperature,
+      humidity: r.humidity,
+      co2: r.co2,
+      count: 1,
+    }));
+  }
+
+  const groups = new Map<string, { t: number; h: number; c: number; n: number; first: string }>();
+  for (const r of readings) {
+    const d = new Date(r.recordedAt);
+    // Build a stable bucket key using Colombian-local fields so day boundaries match the user.
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: DISPLAY_TZ,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(d).reduce<Record<string, string>>((acc, p) => {
+      if (p.type !== "literal") acc[p.type] = p.value;
+      return acc;
+    }, {});
+    let key: string;
+    if (granularity === "minute") key = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+    else if (granularity === "hour") key = `${parts.year}-${parts.month}-${parts.day}T${parts.hour}`;
+    else key = `${parts.year}-${parts.month}-${parts.day}`;
+
+    const entry = groups.get(key);
+    if (entry) {
+      entry.t += r.temperature; entry.h += r.humidity; entry.c += r.co2; entry.n++;
+    } else {
+      groups.set(key, { t: r.temperature, h: r.humidity, c: r.co2, n: 1, first: r.recordedAt });
+    }
+  }
+
+  return Array.from(groups.entries())
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([, v]) => ({
+      bucketStart: v.first,
+      temperature: v.t / v.n,
+      humidity: v.h / v.n,
+      co2: v.c / v.n,
+      count: v.n,
+    }));
 }
 
 export async function getLatest(batchId: string): Promise<TelemetryReading | null> {
