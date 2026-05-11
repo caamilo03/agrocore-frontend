@@ -3,6 +3,8 @@ import {
   normalizeRecordedAt,
   aggregateReadings,
   classifyReading,
+  diagnoseCoverage,
+  RANGE_MAX_LIMIT,
   TelemetryReading,
 } from "./telemetry";
 
@@ -111,6 +113,67 @@ describe("aggregateReadings", () => {
     expect(aggregateReadings([], "hour")).toEqual([]);
     expect(aggregateReadings([], "day")).toEqual([]);
     expect(aggregateReadings([], "raw")).toEqual([]);
+  });
+});
+
+describe("diagnoseCoverage", () => {
+  it("returns ok when readings cover the requested window", () => {
+    const from = new Date("2026-05-08T00:00:00Z");
+    const readings = [
+      reading("2026-05-08T01:00:00Z"),
+      reading("2026-05-09T00:00:00Z"),
+      reading("2026-05-10T00:00:00Z"),
+    ];
+    expect(diagnoseCoverage(readings, from).kind).toBe("ok");
+  });
+
+  it("returns ok for an empty response", () => {
+    const from = new Date("2026-05-08T00:00:00Z");
+    expect(diagnoseCoverage([], from).kind).toBe("ok");
+  });
+
+  it("returns insufficient-history when earliest reading is far after requested from", () => {
+    const from = new Date("2026-04-10T00:00:00Z"); // 30 days ago
+    const readings = [
+      reading("2026-05-04T00:00:00Z"), // only 6 days of data
+      reading("2026-05-05T00:00:00Z"),
+      reading("2026-05-10T00:00:00Z"),
+    ];
+    const result = diagnoseCoverage(readings, from);
+    expect(result.kind).toBe("insufficient-history");
+    if (result.kind === "insufficient-history") {
+      expect(result.earliest).toBe("2026-05-04T00:00:00Z");
+    }
+  });
+
+  it("returns cap when response has exactly RANGE_MAX_LIMIT items", () => {
+    const from = new Date("2026-05-01T00:00:00Z");
+    const readings = Array.from({ length: RANGE_MAX_LIMIT }, (_, i) =>
+      reading(new Date(from.getTime() + i * 1000).toISOString())
+    );
+    const result = diagnoseCoverage(readings, from);
+    expect(result.kind).toBe("cap");
+    if (result.kind === "cap") expect(result.limit).toBe(RANGE_MAX_LIMIT);
+  });
+
+  it("cap takes priority over insufficient-history (5000 items, sparse coverage)", () => {
+    // Even if the data does not actually cover the window, exactly the cap means truncation.
+    const from = new Date("2026-04-01T00:00:00Z");
+    const start = new Date("2026-05-10T00:00:00Z");
+    const readings = Array.from({ length: RANGE_MAX_LIMIT }, (_, i) =>
+      reading(new Date(start.getTime() + i * 1000).toISOString())
+    );
+    expect(diagnoseCoverage(readings, from).kind).toBe("cap");
+  });
+
+  it("respects the tolerance window (small gap is still ok)", () => {
+    const from = new Date("2026-05-10T00:00:00Z");
+    // First reading 30 minutes after requested from — well within default 6h tolerance.
+    const readings = [
+      reading("2026-05-10T00:30:00Z"),
+      reading("2026-05-10T12:00:00Z"),
+    ];
+    expect(diagnoseCoverage(readings, from).kind).toBe("ok");
   });
 });
 

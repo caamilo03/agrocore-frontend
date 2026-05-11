@@ -24,6 +24,8 @@ import {
   formatReadingDateTime,
   BucketGranularity,
   DISPLAY_TZ,
+  diagnoseCoverage,
+  CoverageStatus,
 } from "@/lib/telemetry";
 
 interface CropBatch {
@@ -117,6 +119,7 @@ export default function AnalyticsPage() {
   const [readings, setReadings] = useState<TelemetryReading[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [coverage, setCoverage] = useState<CoverageStatus>({ kind: "ok" });
 
   useEffect(() => {
     (async () => {
@@ -142,9 +145,11 @@ export default function AnalyticsPage() {
       const { from, to } = presetToFromTo(preset);
       const data = await getRange(batchId, from, to);
       setReadings(data);
+      setCoverage(diagnoseCoverage(data, from));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error cargando telemetría");
       setReadings([]);
+      setCoverage({ kind: "ok" });
     } finally {
       setLoading(false);
     }
@@ -234,18 +239,23 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {!loading && readings.length > 0 && chartData.length > 0 && (() => {
-        const expected = appliedPreset === "24h" ? 24 : appliedPreset === "7d" ? 7 : 30;
-        if (chartData.length >= expected / 2) return null;
-        return (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-start text-sm text-amber-800">
-            <AlertCircle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
-            <span>
-              Datos parciales: el rango solicita {expected} {appliedPreset === "24h" ? "horas" : "días"}, pero las {readings.length} lecturas recibidas sólo cubren {chartData.length}. El endpoint <code className="font-mono">/range</code> está topando en 5000 lecturas y descartando el resto del periodo.
-            </span>
-          </div>
-        );
-      })()}
+      {!loading && coverage.kind === "insufficient-history" && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex items-start text-sm text-blue-800">
+          <AlertCircle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+          <span>
+            Sólo hay datos disponibles desde el <strong>{formatReadingDateTime(coverage.earliest)}</strong>. El rango completo estará disponible cuando haya suficiente histórico.
+          </span>
+        </div>
+      )}
+
+      {!loading && coverage.kind === "cap" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-start text-sm text-amber-800">
+          <AlertCircle size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+          <span>
+            Datos parciales: se alcanzó el límite de <strong>{coverage.limit} puntos</strong> del endpoint <code className="font-mono">/range</code>. Considera reducir el rango.
+          </span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">

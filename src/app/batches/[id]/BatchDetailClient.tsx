@@ -36,6 +36,8 @@ import {
   formatReadingDate,
   formatReadingDateTime,
   BucketGranularity,
+  diagnoseCoverage,
+  CoverageStatus,
 } from "@/lib/telemetry";
 import { useLiveTelemetry } from "@/lib/useLiveTelemetry";
 
@@ -112,6 +114,7 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
   const [rangePreset, setRangePreset] = useState<RangePreset>("live");
   const [historical, setHistorical] = useState<TelemetryReading[]>([]);
   const [historicalLoading, setHistoricalLoading] = useState(false);
+  const [coverage, setCoverage] = useState<CoverageStatus>({ kind: "ok" });
 
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -165,8 +168,10 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
     try {
       const data = await getRange(batchId, from, to);
       setHistorical(data);
+      setCoverage(diagnoseCoverage(data, from));
     } catch {
       setHistorical([]);
+      setCoverage({ kind: "ok" });
     } finally {
       setHistoricalLoading(false);
     }
@@ -177,7 +182,6 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
   }, [rangePreset, loadHistorical]);
 
   const series = rangePreset === "live" ? live.recent : historical;
-  const expectedBuckets: Record<RangePreset, number> = { live: 1, "24h": 24, "7d": 7, "30d": 30 };
   const chartData = useMemo(() => {
     const buckets = aggregateReadings(series, granularityFor(rangePreset));
     return buckets.map((b) => ({
@@ -425,14 +429,24 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
           </div>
         )}
 
-        {rangePreset !== "live" && !historicalLoading && chartData.length > 0 && chartData.length < expectedBuckets[rangePreset] / 2 && (
-          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 flex items-start">
+        {rangePreset !== "live" && !historicalLoading && coverage.kind === "insufficient-history" && (
+          <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800 flex items-start">
             <AlertCircle size={14} className="mr-2 mt-0.5 flex-shrink-0" />
             <span>
-              Datos parciales: el rango solicita {expectedBuckets[rangePreset]} {rangePreset === "24h" ? "horas" : "días"}, pero el backend devolvió lecturas que cubren sólo {chartData.length}. Esto suele ocurrir cuando el endpoint <code className="font-mono">/range</code> alcanza su tope de 5000 lecturas y descarta el resto del periodo.
+              Sólo hay datos disponibles desde el <strong>{formatReadingDateTime(coverage.earliest)}</strong>. El rango completo estará disponible cuando haya suficiente histórico.
             </span>
           </div>
         )}
+
+        {rangePreset !== "live" && !historicalLoading && coverage.kind === "cap" && (
+          <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 flex items-start">
+            <AlertCircle size={14} className="mr-2 mt-0.5 flex-shrink-0" />
+            <span>
+              Datos parciales: se alcanzó el límite de <strong>{coverage.limit} puntos</strong> del endpoint <code className="font-mono">/range</code>. Considera reducir el rango para ver detalle completo.
+            </span>
+          </div>
+        )}
+
 
         {live.error && rangePreset === "live" && (
           <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700 flex items-center">

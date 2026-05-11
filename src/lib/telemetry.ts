@@ -231,6 +231,43 @@ export function classifyReading(
   return { tempStatus, humStatus, co2Status, worstStatus };
 }
 
+/** Defensive cap the backend uses for /range. Mirrors RANGE_MAX_LIMIT on the Spring controller. */
+export const RANGE_MAX_LIMIT = 5000;
+
+export type CoverageStatus =
+  | { kind: "ok" }
+  | { kind: "cap"; limit: number }
+  | { kind: "insufficient-history"; earliest: string };
+
+/**
+ * Diagnoses why a /range response may not match the requested window.
+ *
+ * - "cap": the backend returned exactly the defensive limit (RANGE_MAX_LIMIT).
+ *   In that case the data is truncated and the user should narrow the range.
+ * - "insufficient-history": the response has fewer items than the cap AND
+ *   doesn't cover the start of the requested window. Typical when the
+ *   simulator (or the real sensor stream) only has data for the last few
+ *   days. Not actually an error.
+ * - "ok": nothing to flag.
+ *
+ * `readings` must be ordered ASC by recordedAt.
+ */
+export function diagnoseCoverage(
+  readings: TelemetryReading[],
+  requestedFrom: Date,
+  toleranceMs: number = 6 * 60 * 60 * 1000, // 6 hours
+): CoverageStatus {
+  if (readings.length >= RANGE_MAX_LIMIT) {
+    return { kind: "cap", limit: RANGE_MAX_LIMIT };
+  }
+  if (readings.length === 0) return { kind: "ok" };
+  const earliest = new Date(readings[0].recordedAt);
+  if (earliest.getTime() - requestedFrom.getTime() > toleranceMs) {
+    return { kind: "insufficient-history", earliest: readings[0].recordedAt };
+  }
+  return { kind: "ok" };
+}
+
 export const STATUS_COLORS: Record<ReadingStatus, { bg: string; text: string; ring: string; hex: string }> = {
   OK: { bg: "bg-green-100", text: "text-green-700", ring: "ring-green-200", hex: "#22c55e" },
   WARN: { bg: "bg-amber-100", text: "text-amber-700", ring: "ring-amber-200", hex: "#f59e0b" },
