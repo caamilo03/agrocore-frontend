@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Edit, Trash2, AlertCircle, Calendar, Sprout, Layers, Package, Activity, Leaf, Building2 } from 'lucide-react';
+import Link from 'next/link';
+import { Plus, Edit, Trash2, AlertCircle, Calendar, Sprout, Layers, Package, Activity, Leaf, Building2, BarChart3 } from 'lucide-react';
 
 interface CropBatch {
   id?: string;
@@ -274,6 +275,17 @@ export default function BatchesPage() {
                   <span className="text-sm font-extrabold text-blue-700">{batch.yieldKg} kg</span>
                 </div>
               )}
+
+              <Link
+                href={`/batches/${batch.id}`}
+                className="border-t border-slate-100 px-5 py-3 flex items-center justify-between text-sm font-bold text-[#1e5631] hover:bg-green-50 transition-colors"
+              >
+                <span className="inline-flex items-center">
+                  <BarChart3 size={14} className="mr-2" />
+                  Ver telemetría
+                </span>
+                <span aria-hidden>→</span>
+              </Link>
             </div>
           ))
         )}
