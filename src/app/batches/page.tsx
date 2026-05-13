@@ -219,7 +219,7 @@ export default function BatchesPage() {
           <p className="text-slate-500 col-span-full">No hay lotes de producción registrados.</p>
         ) : (
           batchesList.map((batch) => (
-            <div key={batch.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow relative flex flex-col">
+            <div key={batch.id} className="bg-white rounded-xl border border-slate-200 shadow-card overflow-hidden hover:shadow-card-lg transition-shadow relative flex flex-col">
               
               <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
                 <div>

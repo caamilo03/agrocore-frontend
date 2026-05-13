@@ -15,7 +15,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import {
-  LineChart,
+  ComposedChart,
+  Area,
   Line,
   XAxis,
   YAxis,
@@ -88,9 +89,13 @@ function granularityFor(preset: RangePreset): BucketGranularity {
   return "day";
 }
 
-function labelFor(iso: string, preset: RangePreset): string {
-  if (preset === "live") return formatReadingTime(iso);
-  if (preset === "24h") return new Date(iso).toLocaleTimeString("es-CO", { timeZone: "America/Bogota", hour: "2-digit", minute: "2-digit" });
+function labelFor(iso: string, preset: RangePreset, compact = false): string {
+  if (preset === "live") {
+    return compact
+      ? new Date(iso).toLocaleTimeString("es-CO", { timeZone: "America/Bogota", hour12: false, hour: "2-digit", minute: "2-digit" })
+      : formatReadingTime(iso);
+  }
+  if (preset === "24h") return new Date(iso).toLocaleTimeString("es-CO", { timeZone: "America/Bogota", hour12: false, hour: "2-digit", minute: "2-digit" });
   return formatReadingDate(iso);
 }
 
@@ -184,9 +189,10 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
   const series = rangePreset === "live" ? live.recent : historical;
   const chartData = useMemo(() => {
     const buckets = aggregateReadings(series, granularityFor(rangePreset));
+    const compact = rangePreset === "live" && buckets.length > 30;
     return buckets.map((b) => ({
       ts: b.bucketStart,
-      tsLabel: labelFor(b.bucketStart, rangePreset),
+      tsLabel: labelFor(b.bucketStart, rangePreset, compact),
       tsTooltip: rangePreset === "live" ? formatReadingTime(b.bucketStart) : formatReadingDateTime(b.bucketStart),
       temperature: b.temperature,
       humidity: b.humidity,
@@ -236,7 +242,7 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
         <ArrowLeft size={16} className="mr-2" /> Volver a Lotes
       </Link>
 
-      <header className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
+      <header className="bg-white rounded-2xl border border-slate-200 shadow-card p-6 mb-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
@@ -313,7 +319,7 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
         <KpiCard variable="co2" reading={live.latest} status={liveStatus?.co2Status ?? null} species={species} />
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-6">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div className="flex gap-2 flex-wrap">
             {(Object.keys(VARIABLE_META) as Variable[]).map((v) => {
@@ -327,7 +333,15 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
                     active ? "bg-[#1e5631] text-white" : "bg-slate-50 text-slate-600 hover:bg-slate-100"
                   }`}
                 >
-                  <Icon size={14} className="mr-2" />
+                  {active ? (
+                    <Icon size={14} className="mr-2" />
+                  ) : (
+                    <span
+                      className="w-2 h-2 rounded-full mr-2"
+                      style={{ backgroundColor: VARIABLE_META[v].color }}
+                      aria-hidden
+                    />
+                  )}
                   {VARIABLE_META[v].label}
                 </button>
               );
@@ -353,25 +367,35 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
             <div className="h-full flex items-center justify-center text-slate-400 text-sm">Cargando datos…</div>
           ) : chartData.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-400 text-sm">
-              <AlertCircle size={28} className="mb-2" />
-              Sin lecturas en este rango.
+              <div className="w-14 h-14 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center mb-3">
+                <AlertCircle size={24} className="text-slate-300" />
+              </div>
+              <p className="font-semibold text-slate-500">Sin lecturas en este rango</p>
+              <p className="text-xs text-slate-400 mt-1">Prueba con otro periodo o espera nuevas lecturas.</p>
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+              <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="chartFillGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={VARIABLE_META[selectedVariable].color} stopOpacity={0.18} />
+                    <stop offset="100%" stopColor={VARIABLE_META[selectedVariable].color} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 <XAxis
                   dataKey="tsLabel"
-                  tick={{ fill: "#94a3b8", fontSize: 11 }}
+                  tick={{ fill: "#475569", fontSize: 12, fontWeight: 500 }}
+                  tickMargin={8}
                   axisLine={false}
                   tickLine={false}
                   minTickGap={40}
                 />
                 <YAxis
-                  tick={{ fill: "#94a3b8", fontSize: 11 }}
+                  tick={{ fill: "#475569", fontSize: 12, fontWeight: 500 }}
                   axisLine={false}
                   tickLine={false}
-                  unit={VARIABLE_META[selectedVariable].unit}
+                  unit={` ${VARIABLE_META[selectedVariable].unit}`}
                   domain={["auto", "auto"]}
                 />
                 {species && (
@@ -386,7 +410,7 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
                   />
                 )}
                 <Tooltip
-                  contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }}
+                  contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12, boxShadow: "0 8px 24px rgba(15,23,42,0.08)" }}
                   labelStyle={{ color: "#475569", fontWeight: 600 }}
                   labelFormatter={(_, payload) => {
                     const item = payload?.[0]?.payload as { tsTooltip?: string; count?: number } | undefined;
@@ -399,6 +423,14 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
                     return [`${num.toFixed(2)} ${VARIABLE_META[selectedVariable].unit}`, VARIABLE_META[selectedVariable].label];
                   }}
                 />
+                <Area
+                  type="monotone"
+                  dataKey={selectedVariable}
+                  stroke="none"
+                  fill="url(#chartFillGradient)"
+                  fillOpacity={1}
+                  isAnimationActive={false}
+                />
                 <Line
                   type="monotone"
                   dataKey={selectedVariable}
@@ -410,7 +442,7 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
                   activeDot={{ r: 5 }}
                   isAnimationActive={false}
                 />
-              </LineChart>
+              </ComposedChart>
             </ResponsiveContainer>
           )}
         </div>
@@ -476,7 +508,7 @@ function KpiCard({
   const range = species ? thresholdsFor(variable, species) : null;
 
   return (
-    <div className={`bg-white rounded-2xl border shadow-sm p-6 transition-shadow ${statusStyle ? `border-slate-200 ${status === "CRITICAL" ? "ring-2 " + statusStyle.ring : ""}` : "border-slate-200"}`}>
+    <div className={`bg-white rounded-2xl border shadow-card p-6 transition-shadow ${statusStyle ? `border-slate-200 ${status === "CRITICAL" ? "ring-2 " + statusStyle.ring : ""}` : "border-slate-200"}`}>
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center mr-3" style={{ backgroundColor: `${meta.color}15` }}>
@@ -491,10 +523,10 @@ function KpiCard({
         )}
       </div>
       <div className="flex items-baseline">
-        <span className="text-4xl font-extrabold text-slate-900">
+        <span className="text-4xl font-extrabold text-slate-900 tabular-nums">
           {value !== null ? value.toFixed(1) : "—"}
         </span>
-        <span className="text-slate-400 text-sm font-semibold ml-2">{meta.unit}</span>
+        <span className="text-slate-400 text-sm font-medium ml-1">{meta.unit}</span>
       </div>
       {range && (
         <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-3">

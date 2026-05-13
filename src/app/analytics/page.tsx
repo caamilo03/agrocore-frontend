@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Thermometer, Droplets, Wind, Download, Filter, AlertCircle, TrendingUp } from "lucide-react";
 import {
-  LineChart,
+  ComposedChart,
+  Area,
   Line,
   XAxis,
   YAxis,
@@ -67,7 +68,7 @@ function granularityFor(preset: RangePreset): BucketGranularity {
 
 function fmtBucketLabel(iso: string, preset: RangePreset): string {
   if (preset === "24h") {
-    return new Date(iso).toLocaleTimeString("es-CO", { timeZone: DISPLAY_TZ, hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleTimeString("es-CO", { timeZone: DISPLAY_TZ, hour12: false, hour: "2-digit", minute: "2-digit" });
   }
   return formatReadingDate(iso);
 }
@@ -191,7 +192,7 @@ export default function AnalyticsPage() {
         <p className="text-slate-500 font-medium">Monitoreo profundo de variables climáticas y de suelo</p>
       </header>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-8 flex flex-col md:flex-row items-start md:items-end justify-between gap-6">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-6 mb-8 flex flex-col md:flex-row items-start md:items-end justify-between gap-6">
         <div className="flex flex-1 flex-wrap gap-6 w-full">
           <div className="flex-1 min-w-[220px]">
             <label className="block text-[11px] font-bold text-slate-500 mb-2 tracking-widest uppercase">Seleccionar Lote</label>
@@ -292,7 +293,7 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-6">
             <h3 className="text-slate-800 font-bold mb-4 text-lg">Promedios del Periodo</h3>
             <div className="space-y-5">
               <AvgRow icon={Thermometer} color="text-orange-500" label="Temperatura" value={averages.temperature} unit="°C" />
@@ -305,7 +306,7 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-6">
             <h3 className="text-slate-800 font-bold mb-3 text-lg">Reporte de Desvíos</h3>
             {!species ? (
               <p className="text-slate-500 text-sm">Asigna una especie al lote para detectar desvíos.</p>
@@ -374,7 +375,7 @@ interface ChartCardProps {
 
 function ChartCard({ title, unit, color, dataKey, data, average, band, loading }: ChartCardProps) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-6">
       <div className="flex justify-between items-start mb-4">
         <div>
           <h3 className="text-slate-800 font-bold">{title}</h3>
@@ -399,10 +400,16 @@ function ChartCard({ title, unit, color, dataKey, data, average, band, loading }
           <div className="h-full flex items-center justify-center text-slate-400 text-sm">Sin datos en el periodo</div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+            <ComposedChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+              <defs>
+                <linearGradient id={`chartFillGradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={color} stopOpacity={0.18} />
+                  <stop offset="100%" stopColor={color} stopOpacity={0} />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="tsLabel" tick={{ fill: "#94a3b8", fontSize: 11 }} axisLine={false} tickLine={false} minTickGap={40} />
-              <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} axisLine={false} tickLine={false} domain={["auto", "auto"]} unit={unit} />
+              <XAxis dataKey="tsLabel" tick={{ fill: "#475569", fontSize: 12, fontWeight: 500 }} tickMargin={8} axisLine={false} tickLine={false} minTickGap={40} />
+              <YAxis tick={{ fill: "#475569", fontSize: 12, fontWeight: 500 }} axisLine={false} tickLine={false} domain={["auto", "auto"]} unit={` ${unit}`} />
               {band && (
                 <ReferenceArea
                   y1={band.min}
@@ -415,7 +422,7 @@ function ChartCard({ title, unit, color, dataKey, data, average, band, loading }
                 />
               )}
               <Tooltip
-                contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12 }}
+                contentStyle={{ borderRadius: 12, border: "1px solid #e2e8f0", fontSize: 12, boxShadow: "0 8px 24px rgba(15,23,42,0.08)" }}
                 labelStyle={{ color: "#475569", fontWeight: 600 }}
                 labelFormatter={(_, payload) => {
                   const item = payload?.[0]?.payload as { tsTooltip?: string; count?: number } | undefined;
@@ -428,6 +435,14 @@ function ChartCard({ title, unit, color, dataKey, data, average, band, loading }
                   return [`${num.toFixed(2)} ${unit}`, title];
                 }}
               />
+              <Area
+                type="monotone"
+                dataKey={dataKey}
+                stroke="none"
+                fill={`url(#chartFillGradient-${dataKey})`}
+                fillOpacity={1}
+                isAnimationActive={false}
+              />
               <Line
                 type="monotone"
                 dataKey={dataKey}
@@ -437,7 +452,7 @@ function ChartCard({ title, unit, color, dataKey, data, average, band, loading }
                 activeDot={{ r: 5 }}
                 isAnimationActive={false}
               />
-            </LineChart>
+            </ComposedChart>
           </ResponsiveContainer>
         )}
       </div>

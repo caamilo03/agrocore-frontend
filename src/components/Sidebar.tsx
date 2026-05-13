@@ -28,28 +28,28 @@ export default function Sidebar() {
     <aside className="w-64 min-h-screen bg-white border-r border-slate-200 flex flex-col justify-between fixed">
       <div>
         <div className="h-20 flex items-center px-6">
-          <div className="bg-green-500 rounded p-2 mr-3 text-white">
+          <div className="bg-[#1e5631] rounded-lg p-2 mr-3 text-white shadow-card">
             <Sprout size={24} />
           </div>
-          <span className="text-xl font-bold text-slate-800">AgroCore</span>
+          <span className="text-xl font-bold text-slate-800 tracking-tight">AgroCore</span>
         </div>
 
-        <nav className="mt-6 px-4 space-y-2">
+        <nav className="mt-6 px-4 space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.path;
             return (
-              <Link 
-                key={item.path} 
+              <Link
+                key={item.path}
                 href={item.path}
                 className={`flex items-center px-4 py-3 rounded-xl transition-colors ${
-                  isActive 
-                    ? 'bg-[#1e5631] text-white' 
-                    : 'text-slate-500 hover:bg-green-50'
+                  isActive
+                    ? 'bg-[#1e5631] text-white font-bold shadow-card'
+                    : 'text-slate-600 font-medium hover:bg-green-50 hover:text-[#1e5631]'
                 }`}
               >
                 <Icon size={20} className="mr-3" />
-                <span className="font-medium">{item.name}</span>
+                <span>{item.name}</span>
               </Link>
             );
           })}

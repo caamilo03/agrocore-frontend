@@ -135,7 +135,7 @@ export default function SuppliersPage() {
           <p className="text-slate-500 col-span-full">No hay proveedores registrados. ¡Cree el primero!</p>
         ) : (
           suppliersList.map((supplier) => (
-            <div key={supplier.idSupplier} className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow flex flex-col h-full">
+            <div key={supplier.idSupplier} className="bg-white border border-slate-200 rounded-xl p-6 shadow-card hover:shadow-card-lg transition-shadow flex flex-col h-full">
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center">
                   <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center mr-3">
