@@ -13,6 +13,9 @@ import {
   Package,
   AlertCircle,
   RefreshCw,
+  CheckCircle2,
+  Scale,
+  X,
 } from "lucide-react";
 import {
   ComposedChart,
@@ -121,47 +124,106 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
   const [historicalLoading, setHistoricalLoading] = useState(false);
   const [coverage, setCoverage] = useState<CoverageStatus>({ kind: "ok" });
 
+  const [harvestModalOpen, setHarvestModalOpen] = useState(false);
+  const [harvestYield, setHarvestYield] = useState("");
+  const [harvestEndDate, setHarvestEndDate] = useState("");
+  const [harvestLoading, setHarvestLoading] = useState(false);
+  const [harvestError, setHarvestError] = useState<string | null>(null);
+
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const id = window.setInterval(() => setTick((t) => t + 1), 1000);
     return () => window.clearInterval(id);
   }, []);
 
+  const loadMeta = useCallback(async () => {
+    setLoadingMeta(true);
+    try {
+      const [batchesRes, speciesRes, substratesRes] = await Promise.all([
+        fetch(BATCHES_API),
+        fetch(SPECIES_API),
+        fetch(SUBSTRATES_API),
+      ]);
+      if (!batchesRes.ok || !speciesRes.ok) throw new Error("Error cargando metadata");
+      const batches: CropBatch[] = await batchesRes.json();
+      const speciesList: Species[] = await speciesRes.json();
+      const substratesList: Substrate[] = substratesRes.ok ? await substratesRes.json() : [];
+
+      const found = batches.find((b) => b.id === batchId) ?? null;
+      setBatch(found);
+      if (found?.idSpecies) {
+        setSpecies(speciesList.find((s) => s.idSpecies === found.idSpecies) ?? null);
+      }
+      if (found?.idSubstrate) {
+        setSubstrate(substratesList.find((s) => s.idSubstrate === found.idSubstrate) ?? null);
+      }
+      setMetaError(null);
+      return found;
+    } catch (err) {
+      setMetaError(err instanceof Error ? err.message : "Error desconocido");
+      return null;
+    } finally {
+      setLoadingMeta(false);
+    }
+  }, [batchId]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        setLoadingMeta(true);
-        const [batchesRes, speciesRes, substratesRes] = await Promise.all([
-          fetch(BATCHES_API),
-          fetch(SPECIES_API),
-          fetch(SUBSTRATES_API),
-        ]);
-        if (!batchesRes.ok || !speciesRes.ok) throw new Error("Error cargando metadata");
-        const batches: CropBatch[] = await batchesRes.json();
-        const speciesList: Species[] = await speciesRes.json();
-        const substratesList: Substrate[] = substratesRes.ok ? await substratesRes.json() : [];
-
-        if (cancelled) return;
-        const found = batches.find((b) => b.id === batchId) ?? null;
-        setBatch(found);
-        if (found?.idSpecies) {
-          setSpecies(speciesList.find((s) => s.idSpecies === found.idSpecies) ?? null);
-        }
-        if (found?.idSubstrate) {
-          setSubstrate(substratesList.find((s) => s.idSubstrate === found.idSubstrate) ?? null);
-        }
-        setMetaError(null);
-      } catch (err) {
-        if (!cancelled) setMetaError(err instanceof Error ? err.message : "Error desconocido");
-      } finally {
-        if (!cancelled) setLoadingMeta(false);
-      }
+      const found = await loadMeta();
+      if (cancelled) return;
+      if (found && found.status !== "ACTIVO") setRangePreset("30d");
     })();
     return () => { cancelled = true; };
-  }, [batchId]);
+  }, [loadMeta]);
 
-  const live = useLiveTelemetry(batchId, { intervalMs: 5000, recentLimit: 60, enabled: rangePreset === "live" });
+  const isActive = batch?.status === "ACTIVO";
+  const live = useLiveTelemetry(batchId, { intervalMs: 5000, recentLimit: 60, enabled: isActive && rangePreset === "live" });
+
+  const handleHarvest = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    setHarvestError(null);
+    const yieldNum = parseFloat(harvestYield);
+    if (!Number.isFinite(yieldNum) || yieldNum <= 0) {
+      setHarvestError("El peso obtenido debe ser un número mayor a 0.");
+      return;
+    }
+    setHarvestLoading(true);
+    try {
+      const body: { yieldKg: number; endDate?: string } = { yieldKg: yieldNum };
+      if (harvestEndDate) {
+        const iso = new Date(harvestEndDate).toISOString();
+        body.endDate = iso;
+      }
+      const res = await fetch(`${BATCHES_API}/${batchId}/harvest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({} as { error?: string }));
+        if (res.status === 409) {
+          setHarvestError(errBody.error ?? "Este lote ya fue cosechado o se perdió.");
+        } else if (res.status === 400) {
+          setHarvestError(errBody.error ?? "Datos inválidos.");
+        } else if (res.status === 404) {
+          setHarvestError("Lote no encontrado.");
+        } else {
+          setHarvestError(`Error inesperado (${res.status}).`);
+        }
+        return;
+      }
+      await loadMeta();
+      setHarvestModalOpen(false);
+      setHarvestYield("");
+      setHarvestEndDate("");
+      setRangePreset("30d");
+    } catch (err) {
+      setHarvestError(err instanceof Error ? err.message : "Error de red.");
+    } finally {
+      setHarvestLoading(false);
+    }
+  }, [batchId, harvestYield, harvestEndDate, loadMeta]);
 
   const loadHistorical = useCallback(async (preset: Exclude<RangePreset, "live">) => {
     const to = new Date();
@@ -265,14 +327,31 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
               Telemetría en tiempo real y análisis histórico del ciclo.
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-            <RefreshCw size={14} className={live.loading ? "animate-spin" : ""} />
-            <span>Última actualización: {timeSince(live.lastUpdatedAt)}</span>
-            <span suppressHydrationWarning className="hidden">{tick}</span>
+          <div className="flex flex-col items-end gap-2">
+            {isActive ? (
+              <>
+                <button
+                  onClick={() => setHarvestModalOpen(true)}
+                  className="inline-flex items-center bg-[#1e5631] hover:bg-[#153f23] text-white font-bold py-2 px-4 rounded-lg transition-all shadow-card active:scale-95 text-sm"
+                >
+                  <CheckCircle2 size={16} className="mr-2" /> Marcar como cosechado
+                </button>
+                <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+                  <RefreshCw size={14} className={live.loading ? "animate-spin" : ""} />
+                  <span>Última actualización: {timeSince(live.lastUpdatedAt)}</span>
+                  <span suppressHydrationWarning className="hidden">{tick}</span>
+                </div>
+              </>
+            ) : (
+              <div className="text-xs text-slate-500 font-medium text-right">
+                <p className="inline-flex items-center"><CheckCircle2 size={14} className="mr-1.5 text-blue-600" /> Lote finalizado</p>
+                {batch.endDate && <p className="mt-1">Cierre: {new Date(batch.endDate).toLocaleDateString("es-CO")}</p>}
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-100">
+        <div className={`grid grid-cols-1 ${batch.status === "COSECHADO" ? "md:grid-cols-4" : "md:grid-cols-3"} gap-4 mt-6 pt-6 border-t border-slate-100`}>
           <div className="flex items-start">
             <div className="w-9 h-9 rounded bg-green-50 flex items-center justify-center mr-3 flex-shrink-0">
               <Leaf size={16} className="text-green-600" />
@@ -300,6 +379,17 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
               <p className="text-sm font-semibold text-slate-800">{new Date(batch.startDate).toLocaleDateString()}</p>
             </div>
           </div>
+          {batch.status === "COSECHADO" && (
+            <div className="flex items-start">
+              <div className="w-9 h-9 rounded bg-emerald-50 flex items-center justify-center mr-3 flex-shrink-0">
+                <Scale size={16} className="text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Peso Cosechado</p>
+                <p className="text-sm font-semibold text-slate-800 tabular-nums">{batch.yieldKg.toFixed(2)} kg</p>
+              </div>
+            </div>
+          )}
         </div>
       </header>
 
@@ -313,11 +403,13 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <KpiCard variable="temperature" reading={live.latest} status={liveStatus?.tempStatus ?? null} species={species} />
-        <KpiCard variable="humidity" reading={live.latest} status={liveStatus?.humStatus ?? null} species={species} />
-        <KpiCard variable="co2" reading={live.latest} status={liveStatus?.co2Status ?? null} species={species} />
-      </div>
+      {isActive && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <KpiCard variable="temperature" reading={live.latest} status={liveStatus?.tempStatus ?? null} species={species} />
+          <KpiCard variable="humidity" reading={live.latest} status={liveStatus?.humStatus ?? null} species={species} />
+          <KpiCard variable="co2" reading={live.latest} status={liveStatus?.co2Status ?? null} species={species} />
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-card p-6">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
@@ -348,7 +440,10 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
             })}
           </div>
           <div className="flex gap-1 bg-slate-100 rounded-lg p-1">
-            {(["live", "24h", "7d", "30d"] as RangePreset[]).map((p) => (
+            {(isActive
+              ? (["live", "24h", "7d", "30d"] as RangePreset[])
+              : (["24h", "7d", "30d"] as RangePreset[])
+            ).map((p) => (
               <button
                 key={p}
                 onClick={() => setRangePreset(p)}
@@ -486,6 +581,86 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
           </div>
         )}
       </div>
+
+      {harvestModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-card-lg w-full max-w-md">
+            <form onSubmit={handleHarvest}>
+              <div className="flex items-start justify-between p-6 border-b border-slate-100">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900 inline-flex items-center">
+                    <CheckCircle2 size={18} className="mr-2 text-[#1e5631]" /> Marcar lote como cosechado
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">Esta acción es definitiva y cierra el ciclo del lote.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setHarvestModalOpen(false); setHarvestError(null); }}
+                  className="text-slate-400 hover:text-slate-600 p-1 -mr-1"
+                  aria-label="Cerrar"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-2 tracking-widest uppercase">
+                    Peso obtenido (kg) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    value={harvestYield}
+                    onChange={(e) => setHarvestYield(e.target.value)}
+                    placeholder="Ej: 12.50"
+                    className="w-full border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-800 outline-none focus:border-green-600 focus:ring-2 focus:ring-green-600/20 tabular-nums"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-2 tracking-widest uppercase">
+                    Fecha de finalización (opcional)
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={harvestEndDate}
+                    onChange={(e) => setHarvestEndDate(e.target.value)}
+                    className="w-full border border-slate-200 rounded-lg py-2.5 px-3 text-sm text-slate-800 outline-none focus:border-green-600 focus:ring-2 focus:ring-green-600/20"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1.5">Si se omite, se usa la fecha y hora actual.</p>
+                </div>
+
+                {harvestError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700 flex items-start">
+                    <AlertCircle size={14} className="mr-2 mt-0.5 flex-shrink-0" />
+                    <span>{harvestError}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 px-6 py-4 bg-slate-50 rounded-b-2xl border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => { setHarvestModalOpen(false); setHarvestError(null); }}
+                  className="px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                  disabled={harvestLoading}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={harvestLoading}
+                  className="px-5 py-2 text-sm font-bold bg-[#1e5631] text-white rounded-lg hover:bg-[#153f23] transition-colors shadow-card disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center"
+                >
+                  {harvestLoading ? "Procesando…" : (<><CheckCircle2 size={14} className="mr-2" /> Confirmar cosecha</>)}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
