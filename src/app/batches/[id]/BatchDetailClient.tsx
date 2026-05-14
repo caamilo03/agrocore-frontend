@@ -469,7 +469,7 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
               <p className="text-xs text-slate-400 mt-1">Prueba con otro periodo o espera nuevas lecturas.</p>
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minHeight={1}>
               <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="chartFillGradient" x1="0" y1="0" x2="0" y2="1">

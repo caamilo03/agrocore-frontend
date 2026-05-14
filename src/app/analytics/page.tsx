@@ -377,10 +377,20 @@ export default function AnalyticsPage() {
         </div>
       )}
 
+      {isHarvested && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6 flex items-start text-sm text-blue-800">
+          <AlertCircle size={16} className="mr-2 mt-0.5 flex-shrink-0 text-blue-500" />
+          <span>
+            <strong>Visualización histórica · solo lectura.</strong>{" "}
+            Estas gráficas reflejan las condiciones registradas durante el ciclo cerrado del lote. No se actualizan en tiempo real.
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <ChartCard
-            title="Tendencia de Temperatura"
+            title={isHarvested ? "Tendencia histórica de Temperatura" : "Tendencia de Temperatura"}
             unit="°C"
             color="#f97316"
             dataKey="temperature"
@@ -390,7 +400,7 @@ export default function AnalyticsPage() {
             loading={loading}
           />
           <ChartCard
-            title="Tendencia de Humedad"
+            title={isHarvested ? "Tendencia histórica de Humedad" : "Tendencia de Humedad"}
             unit="%"
             color="#3b82f6"
             dataKey="humidity"
@@ -400,7 +410,7 @@ export default function AnalyticsPage() {
             loading={loading}
           />
           <ChartCard
-            title="Tendencia de CO₂"
+            title={isHarvested ? "Tendencia histórica de CO₂" : "Tendencia de CO₂"}
             unit="ppm"
             color="#16a34a"
             dataKey="co2"
@@ -662,7 +672,7 @@ function ChartCard({ title, unit, color, dataKey, data, average, band, loading }
         ) : data.length === 0 ? (
           <div className="h-full flex items-center justify-center text-slate-400 text-sm">Sin datos en el periodo</div>
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minHeight={1}>
             <ComposedChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
               <defs>
                 <linearGradient id={`chartFillGradient-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
