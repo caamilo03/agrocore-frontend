@@ -134,7 +134,7 @@ export default function PanelPrincipal() {
 
   return (
     <div className="p-8 text-slate-800">
-      <header className="flex justify-between items-center mb-8 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+      <header className="flex justify-between items-center mb-8 bg-white p-4 rounded-2xl border border-slate-100 shadow-card">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Panel Principal</h1>
           <p className="text-slate-500 text-sm">Bienvenido de nuevo, Administrador</p>
@@ -157,7 +157,7 @@ export default function PanelPrincipal() {
         {kpis.map((kpi, idx) => {
           const Icon = kpi.icon;
           return (
-            <div key={idx} className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col hover:border-green-300 transition-colors">
+            <div key={idx} className="bg-white p-6 rounded-2xl shadow-card border border-slate-100 flex flex-col hover:border-green-300 transition-colors">
               <div className="flex justify-between items-start mb-4">
                 <span className="text-sm font-medium text-slate-500 w-24 leading-tight">{kpi.title}</span>
                 <div className={`${kpi.bg} p-2 rounded-lg`}>
@@ -172,7 +172,7 @@ export default function PanelPrincipal() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100">
+        <div className="lg:col-span-2 bg-white rounded-2xl shadow-card border border-slate-100">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center">
             <h2 className="text-lg font-bold text-slate-800">Lotes Activos · Vista Rápida</h2>
             <span className="bg-slate-100 text-slate-600 text-xs font-bold px-3 py-1 rounded-full inline-flex items-center">
@@ -232,7 +232,7 @@ export default function PanelPrincipal() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+        <div className="bg-white rounded-2xl shadow-card border border-slate-100 flex flex-col">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center">
             <h2 className="text-lg font-bold text-slate-800 inline-flex items-center">
               <AlertTriangle size={18} className="text-amber-500 mr-2" />

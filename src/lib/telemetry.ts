@@ -66,7 +66,7 @@ function normalize(raw: RawReading): TelemetryReading {
 export const DISPLAY_TZ = "America/Bogota";
 
 export function formatReadingTime(iso: string, opts?: Intl.DateTimeFormatOptions): string {
-  return new Date(iso).toLocaleTimeString("es-CO", { timeZone: DISPLAY_TZ, hour: "2-digit", minute: "2-digit", second: "2-digit", ...opts });
+  return new Date(iso).toLocaleTimeString("es-CO", { timeZone: DISPLAY_TZ, hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit", ...opts });
 }
 
 export function formatReadingDate(iso: string, opts?: Intl.DateTimeFormatOptions): string {
@@ -74,7 +74,7 @@ export function formatReadingDate(iso: string, opts?: Intl.DateTimeFormatOptions
 }
 
 export function formatReadingDateTime(iso: string): string {
-  return formatReadingDate(iso) + " " + new Date(iso).toLocaleTimeString("es-CO", { timeZone: DISPLAY_TZ, hour: "2-digit", minute: "2-digit" });
+  return formatReadingDate(iso) + " " + new Date(iso).toLocaleTimeString("es-CO", { timeZone: DISPLAY_TZ, hour12: false, hour: "2-digit", minute: "2-digit" });
 }
 
 export type BucketGranularity = "raw" | "minute" | "hour" | "day";

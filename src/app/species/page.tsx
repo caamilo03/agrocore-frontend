@@ -163,7 +163,7 @@ export default function SpeciesPage() {
           <p className="text-slate-500">No hay especies registradas. ¡Cree la primera!</p>
         ) : (
           speciesList.map((species) => (
-            <div key={species.idSpecies} className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div key={species.idSpecies} className="bg-white border border-slate-200 rounded-xl p-6 shadow-card hover:shadow-card-lg transition-shadow">
               <div className="flex justify-between items-start mb-6">
                 <h3 className="text-xl font-bold text-slate-800">{species.name}</h3>
                 <div className="flex gap-3">
