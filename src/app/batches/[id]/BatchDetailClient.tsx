@@ -65,9 +65,13 @@ interface Substrate {
   typeName: string;
 }
 
-const BATCHES_API = `${process.env.NEXT_PUBLIC_API_URL}/batches`;
-const SPECIES_API = `${process.env.NEXT_PUBLIC_API_URL}/species`;
-const SUBSTRATES_API = `${process.env.NEXT_PUBLIC_API_URL}/substrates`;
+import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { canWrite } from "@/lib/auth";
+
+const BATCHES_API = "/batches";
+const SPECIES_API = "/species";
+const SUBSTRATES_API = "/substrates";
 
 type Variable = "temperature" | "humidity" | "co2";
 type RangePreset = "live" | "24h" | "7d" | "30d";
@@ -140,9 +144,9 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
     setLoadingMeta(true);
     try {
       const [batchesRes, speciesRes, substratesRes] = await Promise.all([
-        fetch(BATCHES_API),
-        fetch(SPECIES_API),
-        fetch(SUBSTRATES_API),
+        apiFetch(BATCHES_API),
+        apiFetch(SPECIES_API),
+        apiFetch(SUBSTRATES_API),
       ]);
       if (!batchesRes.ok || !speciesRes.ok) throw new Error("Error cargando metadata");
       const batches: CropBatch[] = await batchesRes.json();
@@ -177,6 +181,7 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
     return () => { cancelled = true; };
   }, [loadMeta]);
 
+  const { user } = useAuth();
   const isActive = batch?.status === "ACTIVO";
   const live = useLiveTelemetry(batchId, { intervalMs: 5000, recentLimit: 60, enabled: isActive && rangePreset === "live" });
 
@@ -195,9 +200,8 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
         const iso = new Date(harvestEndDate).toISOString();
         body.endDate = iso;
       }
-      const res = await fetch(`${BATCHES_API}/${batchId}/harvest`, {
+      const res = await apiFetch(`${BATCHES_API}/${batchId}/harvest`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       if (!res.ok) {
@@ -330,12 +334,14 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
           <div className="flex flex-col items-end gap-2">
             {isActive ? (
               <>
-                <button
-                  onClick={() => setHarvestModalOpen(true)}
-                  className="inline-flex items-center bg-[#1e5631] hover:bg-[#153f23] text-white font-bold py-2 px-4 rounded-lg transition-all shadow-card active:scale-95 text-sm"
-                >
-                  <CheckCircle2 size={16} className="mr-2" /> Marcar como cosechado
-                </button>
+                {canWrite(user?.role) && (
+                  <button
+                    onClick={() => setHarvestModalOpen(true)}
+                    className="inline-flex items-center bg-[#1e5631] hover:bg-[#153f23] text-white font-bold py-2 px-4 rounded-lg transition-all shadow-card active:scale-95 text-sm"
+                  >
+                    <CheckCircle2 size={16} className="mr-2" /> Marcar como cosechado
+                  </button>
+                )}
                 <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
                   <RefreshCw size={14} className={live.loading ? "animate-spin" : ""} />
                   <span>Última actualización: {timeSince(live.lastUpdatedAt)}</span>

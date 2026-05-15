@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
+import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { canWrite } from "@/lib/auth";
 import Link from 'next/link';
 import { Plus, Edit, Trash2, AlertCircle, Calendar, Sprout, Layers, Package, Activity, Leaf, Building2, BarChart3 } from 'lucide-react';
 
@@ -32,12 +35,14 @@ interface Supplier {
   nameSupplier: string;
 }
 
-const BATCHES_API_URL = `${process.env.NEXT_PUBLIC_API_URL}/batches`;
-const SPECIES_API_URL = `${process.env.NEXT_PUBLIC_API_URL}/species`;
-const SUBSTRATES_API_URL = `${process.env.NEXT_PUBLIC_API_URL}/substrates`;
-const SUPPLIERS_API_URL = `${process.env.NEXT_PUBLIC_API_URL}/suppliers`;
+const BATCHES_API_URL = "/batches";
+const SPECIES_API_URL = "/species";
+const SUBSTRATES_API_URL = "/substrates";
+const SUPPLIERS_API_URL = "/suppliers";
 
 export default function BatchesPage() {
+  const { user } = useAuth();
+  const userCanWrite = canWrite(user?.role);
   const [batchesList, setBatchesList] = useState<CropBatch[]>([]);
   const [speciesList, setSpeciesList] = useState<Species[]>([]);
   const [substratesList, setSubstratesList] = useState<Substrate[]>([]);
@@ -55,10 +60,10 @@ export default function BatchesPage() {
   const fetchData = useCallback(async () => {
     try {
       const [batchesRes, speciesRes, substratesRes, suppliersRes] = await Promise.all([
-        fetch(BATCHES_API_URL),
-        fetch(SPECIES_API_URL),
-        fetch(SUBSTRATES_API_URL),
-        fetch(SUPPLIERS_API_URL)
+        apiFetch(BATCHES_API_URL),
+        apiFetch(SPECIES_API_URL),
+        apiFetch(SUBSTRATES_API_URL),
+        apiFetch(SUPPLIERS_API_URL)
       ]);
 
       if (batchesRes.ok) setBatchesList(await batchesRes.json());
@@ -144,9 +149,8 @@ export default function BatchesPage() {
       if (!payload.idSubstrateSupplier || payload.idSubstrateSupplier === "") payload.idSubstrateSupplier = null;
       if (!payload.idUser) payload.idUser = null;
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
@@ -164,7 +168,7 @@ export default function BatchesPage() {
   const handleDelete = async (id: string) => {
     if (confirm("¿Seguro que quiere borrar este lote de producción?")) {
       try {
-        const response = await fetch(`${BATCHES_API_URL}/${id}`, { method: "DELETE" });
+        const response = await apiFetch(`${BATCHES_API_URL}/${id}`, { method: "DELETE" });
         if (response.ok) fetchData();
       } catch (error) {
         console.error("Error borrando el lote:", error);
@@ -205,13 +209,15 @@ export default function BatchesPage() {
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-2">Lotes de Producción</h1>
           <p className="text-slate-500 font-medium">Supervisión y control del ciclo de cultivo en tiempo real.</p>
         </div>
-        <button 
-          onClick={openModalToCreate}
-          className="bg-[#1e5631] hover:bg-[#153f23] text-white font-bold py-2.5 px-6 rounded-lg transition-colors shadow-sm flex items-center text-sm"
-        >
-          <Plus size={18} className="mr-2" />
-          Nuevo Lote
-        </button>
+        {userCanWrite && (
+          <button
+            onClick={openModalToCreate}
+            className="bg-[#1e5631] hover:bg-[#153f23] text-white font-bold py-2.5 px-6 rounded-lg transition-colors shadow-sm flex items-center text-sm"
+          >
+            <Plus size={18} className="mr-2" />
+            Nuevo Lote
+          </button>
+        )}
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -231,10 +237,12 @@ export default function BatchesPage() {
                     Lote {batch.id?.substring(0, 6).toUpperCase()}
                   </h2>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => openModalToEdit(batch)} className="text-slate-400 hover:text-[#1e5631] transition-colors p-1" title="Editar Lote"><Edit size={18} /></button>
-                  <button onClick={() => handleDelete(batch.id!)} className="text-slate-400 hover:text-red-500 transition-colors p-1" title="Eliminar Lote"><Trash2 size={18} /></button>
-                </div>
+                {userCanWrite && (
+                  <div className="flex gap-2">
+                    <button onClick={() => openModalToEdit(batch)} className="text-slate-400 hover:text-[#1e5631] transition-colors p-1" title="Editar Lote"><Edit size={18} /></button>
+                    <button onClick={() => handleDelete(batch.id!)} className="text-slate-400 hover:text-red-500 transition-colors p-1" title="Eliminar Lote"><Trash2 size={18} /></button>
+                  </div>
+                )}
               </div>
 
               <div className="p-5 space-y-4 flex-grow">

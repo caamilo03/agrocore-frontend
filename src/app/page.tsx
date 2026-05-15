@@ -41,8 +41,10 @@ interface BatchLive {
   worst: ReadingStatus | null;
 }
 
-const BATCHES_API = `${process.env.NEXT_PUBLIC_API_URL}/batches`;
-const SPECIES_API = `${process.env.NEXT_PUBLIC_API_URL}/species`;
+import { apiFetch } from "@/lib/api";
+
+const BATCHES_API = "/batches";
+const SPECIES_API = "/species";
 
 function batchShortId(id: string): string {
   return `#${id.substring(0, 6).toUpperCase()}`;
@@ -61,7 +63,7 @@ export default function PanelPrincipal() {
 
     const fetchAll = async () => {
       try {
-        const [batchesRes, speciesRes] = await Promise.all([fetch(BATCHES_API), fetch(SPECIES_API)]);
+        const [batchesRes, speciesRes] = await Promise.all([apiFetch(BATCHES_API), apiFetch(SPECIES_API)]);
         if (!batchesRes.ok || !speciesRes.ok) throw new Error("Error cargando datos");
         const allBatches: CropBatch[] = await batchesRes.json();
         const allSpecies: Species[] = await speciesRes.json();

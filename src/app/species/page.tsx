@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { canWrite } from "@/lib/auth";
 import { Thermometer, Droplets, Wind, Edit, Trash2, Plus, AlertCircle } from "lucide-react";
 
 interface Species {
@@ -14,9 +17,11 @@ interface Species {
   maxCo2: number;
 }
 
-const API_URL = `${process.env.NEXT_PUBLIC_API_URL}/species`;
+const API_URL = "/species";
 
 export default function SpeciesPage() {
+  const { user } = useAuth();
+  const userCanWrite = canWrite(user?.role);
   const [speciesList, setSpeciesList] = useState<Species[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -36,7 +41,7 @@ export default function SpeciesPage() {
 
   const fetchSpecies = useCallback(async () => {
     try {
-      const response = await fetch(API_URL);
+      const response = await apiFetch(API_URL);
       if (response.ok) {
         const data = await response.json();
         setSpeciesList(data);
@@ -98,7 +103,7 @@ export default function SpeciesPage() {
       const url = isEditing ? `${API_URL}/${editingId}` : API_URL;
       const method = isEditing ? "PUT" : "POST";
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -116,7 +121,7 @@ export default function SpeciesPage() {
   const handleDelete = async (id: string) => {
     if (confirm("¿Seguro que quiere borrar esta especie?")) {
       try {
-        const response = await fetch(`${API_URL}/${id}`, {
+        const response = await apiFetch(`${API_URL}/${id}`, {
           method: "DELETE",
         });
         if (response.ok) fetchSpecies();
@@ -149,13 +154,15 @@ export default function SpeciesPage() {
           <h1 className="text-3xl font-bold text-slate-800">Gestión de Especies</h1>
           <p className="text-slate-500 mt-1">Registro y configuración de parámetros óptimos por especie</p>
         </div>
-        <button
-          onClick={openModalToCreate}
-          className="bg-[#1e5631] hover:bg-[#153f23] text-white px-6 py-2.5 rounded-lg font-medium transition-colors shadow-sm flex items-center"
-        >
-          <Plus size={20} className="mr-2" />
-          Nueva Especie
-        </button>
+        {userCanWrite && (
+          <button
+            onClick={openModalToCreate}
+            className="bg-[#1e5631] hover:bg-[#153f23] text-white px-6 py-2.5 rounded-lg font-medium transition-colors shadow-sm flex items-center"
+          >
+            <Plus size={20} className="mr-2" />
+            Nueva Especie
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -166,14 +173,16 @@ export default function SpeciesPage() {
             <div key={species.idSpecies} className="bg-white border border-slate-200 rounded-xl p-6 shadow-card hover:shadow-card-lg transition-shadow">
               <div className="flex justify-between items-start mb-6">
                 <h3 className="text-xl font-bold text-slate-800">{species.name}</h3>
-                <div className="flex gap-3">
-                  <button onClick={() => openModalToEdit(species)} className="text-slate-400 hover:text-[#1e5631] transition-colors" title="Editar">
-                    <Edit size={20} />
-                  </button>
-                  <button onClick={() => handleDelete(species.idSpecies!)} className="text-slate-400 hover:text-red-500 transition-colors" title="Eliminar">
-                    <Trash2 size={20} />
-                  </button>
-                </div>
+                {userCanWrite && (
+                  <div className="flex gap-3">
+                    <button onClick={() => openModalToEdit(species)} className="text-slate-400 hover:text-[#1e5631] transition-colors" title="Editar">
+                      <Edit size={20} />
+                    </button>
+                    <button onClick={() => handleDelete(species.idSpecies!)} className="text-slate-400 hover:text-red-500 transition-colors" title="Eliminar">
+                      <Trash2 size={20} />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-5">

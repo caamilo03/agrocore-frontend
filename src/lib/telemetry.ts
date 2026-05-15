@@ -25,7 +25,9 @@ export interface ClassifiedReading {
   worstStatus: ReadingStatus;
 }
 
-const TELEMETRY_BASE = `${process.env.NEXT_PUBLIC_API_URL}/telemetry/batches`;
+import { apiFetch } from "./api";
+
+const TELEMETRY_BASE = "/telemetry/batches";
 
 interface RawReading {
   id: number;
@@ -178,14 +180,14 @@ export function aggregateReadings(readings: TelemetryReading[], granularity: Buc
 }
 
 export async function getLatest(batchId: string): Promise<TelemetryReading | null> {
-  const res = await fetch(`${TELEMETRY_BASE}/${batchId}/latest`, { cache: "no-store" });
+  const res = await apiFetch(`${TELEMETRY_BASE}/${batchId}/latest`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Telemetry latest failed: ${res.status}`);
   return normalize(await res.json());
 }
 
 export async function getRecent(batchId: string, limit = 100): Promise<TelemetryReading[]> {
-  const res = await fetch(`${TELEMETRY_BASE}/${batchId}/recent?limit=${limit}`, { cache: "no-store" });
+  const res = await apiFetch(`${TELEMETRY_BASE}/${batchId}/recent?limit=${limit}`);
   if (!res.ok) throw new Error(`Telemetry recent failed: ${res.status}`);
   const data: RawReading[] = await res.json();
   return data.map(normalize);
@@ -200,7 +202,7 @@ export async function getRange(
     from: from.toISOString().slice(0, 19),
     to: to.toISOString().slice(0, 19),
   });
-  const res = await fetch(`${TELEMETRY_BASE}/${batchId}/range?${params}`, { cache: "no-store" });
+  const res = await apiFetch(`${TELEMETRY_BASE}/${batchId}/range?${params}`);
   if (!res.ok) throw new Error(`Telemetry range failed: ${res.status}`);
   const data: RawReading[] = await res.json();
   return data.map(normalize);

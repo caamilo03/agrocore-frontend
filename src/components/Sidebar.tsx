@@ -1,32 +1,54 @@
 "use client";
 
-import { 
-  LayoutDashboard, 
-  Sprout, 
-  Layers, 
-  BarChart3, 
+import {
+  LayoutDashboard,
+  Sprout,
+  Layers,
+  BarChart3,
   LogOut,
   Package,
-  Building2
-} from 'lucide-react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+  Building2,
+} from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import Image from "next/image";
+import { useAuth } from "@/context/AuthContext";
+
+const ROLE_LABEL: Record<string, string> = {
+  ADMIN: "Administrador",
+  OPERADOR: "Operador",
+  OBSERVADOR: "Observador",
+};
+
+const ROLE_BADGE: Record<string, string> = {
+  ADMIN: "bg-emerald-100 text-emerald-700",
+  OPERADOR: "bg-blue-100 text-blue-700",
+  OBSERVADOR: "bg-slate-100 text-slate-600",
+};
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, logout } = useAuth();
 
   const navItems = [
-    { name: 'Panel Principal', path: '/', icon: LayoutDashboard },
-    { name: 'Gestión de Especies', path: '/species', icon: Sprout },
-    { name: 'Gestión de Sustratos', path: '/substrates', icon: Package },
-    { name: 'Gestión de Proveedores', path: '/suppliers', icon: Building2 },
-    { name: 'Lotes Activos', path: '/batches', icon: Layers },
-    { name: 'Analítica Histórica', path: '/analytics', icon: BarChart3 },
+    { name: "Panel Principal", path: "/", icon: LayoutDashboard },
+    { name: "Gestión de Especies", path: "/species", icon: Sprout },
+    { name: "Gestión de Sustratos", path: "/substrates", icon: Package },
+    { name: "Gestión de Proveedores", path: "/suppliers", icon: Building2 },
+    { name: "Lotes Activos", path: "/batches", icon: Layers },
+    { name: "Analítica Histórica", path: "/analytics", icon: BarChart3 },
   ];
 
+  const handleLogout = () => {
+    logout();
+    router.replace("/login");
+  };
+
   return (
-    <aside className="w-64 min-h-screen bg-white border-r border-slate-200 flex flex-col justify-between fixed">
+    <aside className="w-64 min-h-screen bg-white border-r border-slate-200 flex flex-col justify-between fixed top-0 left-0 z-40">
       <div>
+        {/* Logo */}
         <div className="h-20 flex items-center px-6">
           <div className="bg-[#1e5631] rounded-lg p-2 mr-3 text-white shadow-card">
             <Sprout size={24} />
@@ -34,6 +56,7 @@ export default function Sidebar() {
           <span className="text-xl font-bold text-slate-800 tracking-tight">AgroCore</span>
         </div>
 
+        {/* Nav */}
         <nav className="mt-6 px-4 space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -44,8 +67,8 @@ export default function Sidebar() {
                 href={item.path}
                 className={`flex items-center px-4 py-3 rounded-xl transition-colors ${
                   isActive
-                    ? 'bg-[#1e5631] text-white font-bold shadow-card'
-                    : 'text-slate-600 font-medium hover:bg-green-50 hover:text-[#1e5631]'
+                    ? "bg-[#1e5631] text-white font-bold shadow-card"
+                    : "text-slate-600 font-medium hover:bg-green-50 hover:text-[#1e5631]"
                 }`}
               >
                 <Icon size={20} className="mr-3" />
@@ -56,17 +79,38 @@ export default function Sidebar() {
         </nav>
       </div>
 
+      {/* User section */}
       <div className="p-4 border-t border-slate-200">
-        <div className="flex items-center px-4 py-3 mb-4 bg-slate-50 rounded-xl cursor-not-allowed">
-          <div className="w-8 h-8 rounded-full bg-slate-300 mr-3 flex-shrink-0"></div>
-          <div className="flex flex-col text-sm">
-            <span className="font-bold text-slate-800">Admin Usuario</span>
-            <span className="text-slate-500 text-xs">Supervisor de Planta</span>
+        {user && (
+          <div className="flex items-center px-3 py-3 mb-3 bg-slate-50 rounded-xl">
+            {user.avatarUrl ? (
+              <Image
+                src={user.avatarUrl}
+                alt={user.username}
+                width={36}
+                height={36}
+                className="rounded-full mr-3 flex-shrink-0 object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-[#1e5631] text-white flex items-center justify-center mr-3 flex-shrink-0 text-sm font-bold">
+                {user.username.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-slate-800 text-sm truncate">{user.username}</p>
+              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase mt-0.5 ${ROLE_BADGE[user.role] ?? "bg-slate-100 text-slate-600"}`}>
+                {ROLE_LABEL[user.role] ?? user.role}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
-        <button className="flex w-full items-center justify-center px-4 py-3 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl font-medium transition-colors">
-          <LogOut size={18} className="mr-2" />
+        <button
+          onClick={handleLogout}
+          className="flex w-full items-center justify-center px-4 py-2.5 text-slate-600 bg-slate-100 hover:bg-red-50 hover:text-red-600 rounded-xl font-medium transition-colors text-sm"
+        >
+          <LogOut size={16} className="mr-2" />
           Cerrar Sesión
         </button>
       </div>

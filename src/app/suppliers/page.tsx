@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
+import { canWrite } from "@/lib/auth";
 import { Building2, Edit, Trash2, Plus, AlertCircle, Phone } from "lucide-react";
 
 interface Supplier {
@@ -9,9 +12,11 @@ interface Supplier {
   contactInfo: string;
 }
 
-const API_URL = `${process.env.NEXT_PUBLIC_API_URL}/suppliers`;
+const API_URL = "/suppliers";
 
 export default function SuppliersPage() {
+  const { user } = useAuth();
+  const userCanWrite = canWrite(user?.role);
   const [suppliersList, setSuppliersList] = useState<Supplier[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -25,7 +30,7 @@ export default function SuppliersPage() {
 
   const fetchSuppliers = useCallback(async () => {
     try {
-      const response = await fetch(API_URL);
+      const response = await apiFetch(API_URL);
       if (response.ok) {
         const data = await response.json();
         setSuppliersList(data);
@@ -70,7 +75,7 @@ export default function SuppliersPage() {
       const url = isEditing ? `${API_URL}/${editingId}` : API_URL;
       const method = isEditing ? "PUT" : "POST";
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -88,7 +93,7 @@ export default function SuppliersPage() {
   const handleDelete = async (id: string) => {
     if (confirm("¿Seguro que quiere borrar este proveedor?")) {
       try {
-        const response = await fetch(`${API_URL}/${id}`, {
+        const response = await apiFetch(`${API_URL}/${id}`, {
           method: "DELETE",
         });
         if (response.ok) fetchSuppliers();
@@ -121,13 +126,15 @@ export default function SuppliersPage() {
           <h1 className="text-3xl font-bold text-slate-800">Gestión de Proveedores</h1>
           <p className="text-slate-500 mt-1">Directorio de distribuidores de insumos y especies</p>
         </div>
-        <button
-          onClick={openModalToCreate}
-          className="bg-[#1e5631] hover:bg-[#153f23] text-white px-6 py-2.5 rounded-lg font-medium transition-colors shadow-sm flex items-center"
-        >
-          <Plus size={20} className="mr-2" />
-          Nuevo Proveedor
-        </button>
+        {userCanWrite && (
+          <button
+            onClick={openModalToCreate}
+            className="bg-[#1e5631] hover:bg-[#153f23] text-white px-6 py-2.5 rounded-lg font-medium transition-colors shadow-sm flex items-center"
+          >
+            <Plus size={20} className="mr-2" />
+            Nuevo Proveedor
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -143,14 +150,16 @@ export default function SuppliersPage() {
                   </div>
                   <h3 className="text-lg font-bold text-slate-800 leading-tight">{supplier.nameSupplier}</h3>
                 </div>
-                <div className="flex gap-2 ml-2">
-                  <button onClick={() => openModalToEdit(supplier)} className="text-slate-400 hover:text-[#1e5631] transition-colors p-1" title="Editar">
-                    <Edit size={18} />
-                  </button>
-                  <button onClick={() => handleDelete(supplier.idSupplier!)} className="text-slate-400 hover:text-red-500 transition-colors p-1" title="Eliminar">
-                    <Trash2 size={18} />
-                  </button>
-                </div>
+                {userCanWrite && (
+                  <div className="flex gap-2 ml-2">
+                    <button onClick={() => openModalToEdit(supplier)} className="text-slate-400 hover:text-[#1e5631] transition-colors p-1" title="Editar">
+                      <Edit size={18} />
+                    </button>
+                    <button onClick={() => handleDelete(supplier.idSupplier!)} className="text-slate-400 hover:text-red-500 transition-colors p-1" title="Eliminar">
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="bg-slate-50 p-4 rounded-lg flex-grow border border-slate-100">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { apiFetch } from "@/lib/api";
 import { Thermometer, Droplets, Wind, Download, Filter, AlertCircle, TrendingUp, Activity, CheckCircle2, Leaf, Package, Building2, Scale, Calendar } from "lucide-react";
 import {
   ComposedChart,
@@ -64,8 +65,8 @@ interface Traceability {
 
 type StatusFilter = "ACTIVO" | "COSECHADO";
 
-const BATCHES_API = `${process.env.NEXT_PUBLIC_API_URL}/batches`;
-const SPECIES_API = `${process.env.NEXT_PUBLIC_API_URL}/species`;
+const BATCHES_API = "/batches";
+const SPECIES_API = "/species";
 
 type RangePreset = "24h" | "7d" | "30d";
 
@@ -151,7 +152,7 @@ export default function AnalyticsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const speciesRes = await fetch(SPECIES_API);
+        const speciesRes = await apiFetch(SPECIES_API);
         if (speciesRes.ok) setSpeciesList(await speciesRes.json());
       } catch {
         // species fetch failure is non-fatal
@@ -163,7 +164,7 @@ export default function AnalyticsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${BATCHES_API}?status=${statusFilter}`);
+        const res = await apiFetch(`${BATCHES_API}?status=${statusFilter}`);
         if (!res.ok) throw new Error(`Error cargando lotes (${res.status})`);
         const data: CropBatch[] = await res.json();
         if (cancelled) return;
@@ -200,7 +201,7 @@ export default function AnalyticsPage() {
     setTraceabilityLoading(true);
     setError(null);
     try {
-      const traceRes = await fetch(`${BATCHES_API}/${batch.id}/traceability`);
+      const traceRes = await apiFetch(`${BATCHES_API}/${batch.id}/traceability`);
       if (!traceRes.ok) throw new Error(`Error trazabilidad (${traceRes.status})`);
       const trace: Traceability = await traceRes.json();
       setTraceability(trace);
