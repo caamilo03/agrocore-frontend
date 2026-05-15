@@ -44,6 +44,8 @@ import {
   CoverageStatus,
 } from "@/lib/telemetry";
 import { useLiveTelemetry } from "@/lib/useLiveTelemetry";
+import { useAuth } from "@/context/AuthContext";
+import { canWrite } from "@/lib/auth";
 
 interface CropBatch {
   id: string;
@@ -66,8 +68,6 @@ interface Substrate {
 }
 
 import { apiFetch } from "@/lib/api";
-import { useAuth } from "@/context/AuthContext";
-import { canWrite } from "@/lib/auth";
 
 const BATCHES_API = "/batches";
 const SPECIES_API = "/species";
@@ -116,6 +116,8 @@ function timeSince(date: Date | null): string {
 }
 
 export default function BatchDetailClient({ batchId }: { batchId: string }) {
+  const { user } = useAuth();
+  const userCanWrite = canWrite(user?.role);
   const [batch, setBatch] = useState<CropBatch | null>(null);
   const [species, setSpecies] = useState<Species | null>(null);
   const [substrate, setSubstrate] = useState<Substrate | null>(null);
@@ -181,7 +183,6 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
     return () => { cancelled = true; };
   }, [loadMeta]);
 
-  const { user } = useAuth();
   const isActive = batch?.status === "ACTIVO";
   const live = useLiveTelemetry(batchId, { intervalMs: 5000, recentLimit: 60, enabled: isActive && rangePreset === "live" });
 
@@ -334,7 +335,7 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
           <div className="flex flex-col items-end gap-2">
             {isActive ? (
               <>
-                {canWrite(user?.role) && (
+                {userCanWrite && (
                   <button
                     onClick={() => setHarvestModalOpen(true)}
                     className="inline-flex items-center bg-[#1e5631] hover:bg-[#153f23] text-white font-bold py-2 px-4 rounded-lg transition-all shadow-card active:scale-95 text-sm"

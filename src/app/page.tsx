@@ -20,6 +20,7 @@ import {
   ReadingStatus,
   getLatest,
 } from "@/lib/telemetry";
+import { apiFetch } from "@/lib/api";
 
 interface CropBatch {
   id: string;
@@ -40,8 +41,6 @@ interface BatchLive {
   reading: TelemetryReading | null;
   worst: ReadingStatus | null;
 }
-
-import { apiFetch } from "@/lib/api";
 
 const BATCHES_API = "/batches";
 const SPECIES_API = "/species";
