@@ -3,21 +3,25 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GoogleLogin, CredentialResponse } from "@react-oauth/google";
-import { Sprout, AlertCircle } from "lucide-react";
+import { Sprout, AlertCircle, Clock, ShieldOff, LogIn } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { User } from "@/lib/auth";
 
 const AUTH_API = `${process.env.NEXT_PUBLIC_API_URL}/auth/google`;
+
+type LoginScreen = "form" | "pending" | "blocked";
 
 export default function LoginPage() {
   const { user, isLoading, login } = useAuth();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [screen, setScreen] = useState<LoginScreen>("form");
+  const [pendingEmail, setPendingEmail] = useState<string>("");
 
-  // Already authenticated → go to dashboard
+  // Already authenticated (ACTIVO) → go to dashboard
   useEffect(() => {
-    if (!isLoading && user) router.replace("/");
+    if (!isLoading && user && user.status === "ACTIVO") router.replace("/");
   }, [user, isLoading, router]);
 
   const handleSuccess = async (credentialResponse: CredentialResponse) => {
@@ -37,7 +41,9 @@ export default function LoginPage() {
       if (!res.ok) {
         const body = await res.json().catch(() => ({} as { error?: string }));
         if (res.status === 403) {
+          // Backend may also send 403 for BLOQUEADO
           setError(body.error ?? "Tu cuenta ha sido suspendida. Contacta al administrador.");
+          setScreen("blocked");
         } else if (res.status === 401) {
           setError(body.error ?? "Token de Google inválido o expirado.");
         } else if (res.status === 400) {
@@ -49,6 +55,23 @@ export default function LoginPage() {
       }
 
       const { token, user: authUser } = await res.json() as { token: string; user: User };
+
+      // Check user.status BEFORE saving token or navigating
+      if (authUser.status === "PENDIENTE") {
+        // Account created but not yet approved — do NOT save token
+        setPendingEmail(authUser.email);
+        setScreen("pending");
+        return;
+      }
+
+      if (authUser.status === "BLOQUEADO") {
+        // Account suspended — do NOT save token
+        setError("Tu cuenta ha sido suspendida. Contacta al administrador.");
+        setScreen("blocked");
+        return;
+      }
+
+      // ACTIVO → save token and go to dashboard
       login(token, authUser);
       router.replace("/");
     } catch {
@@ -58,8 +81,72 @@ export default function LoginPage() {
     }
   };
 
-  if (isLoading) return null; // wait for hydration
+  if (isLoading) return null;
 
+  // ── Pending approval screen ──────────────────────────────────────
+  if (screen === "pending") {
+    return (
+      <div className="min-h-screen bg-[#F9FBF9] flex items-center justify-center p-4">
+        <div className="w-full max-w-sm text-center">
+          <div className="flex justify-center mb-6">
+            <div className="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center">
+              <Clock size={32} className="text-amber-600" />
+            </div>
+          </div>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight mb-3">
+            Cuenta en revisión
+          </h1>
+          <p className="text-slate-500 text-sm leading-relaxed mb-6">
+            Tu cuenta está pendiente de aprobación por un administrador.
+            Cuando sea aprobada podrás acceder a la plataforma.
+          </p>
+          {pendingEmail && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-700 font-medium mb-6">
+              Solicitud registrada para{" "}
+              <span className="font-bold">{pendingEmail}</span>
+            </div>
+          )}
+          <button
+            onClick={() => { setScreen("form"); setError(null); }}
+            className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
+          >
+            <LogIn size={14} className="mr-1.5" />
+            Volver a iniciar sesión
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Blocked screen ───────────────────────────────────────────────
+  if (screen === "blocked") {
+    return (
+      <div className="min-h-screen bg-[#F9FBF9] flex items-center justify-center p-4">
+        <div className="w-full max-w-sm text-center">
+          <div className="flex justify-center mb-6">
+            <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center">
+              <ShieldOff size={32} className="text-red-500" />
+            </div>
+          </div>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight mb-3">
+            Acceso suspendido
+          </h1>
+          <p className="text-slate-500 text-sm leading-relaxed mb-6">
+            {error ?? "Tu cuenta ha sido suspendida. Contacta al administrador."}
+          </p>
+          <button
+            onClick={() => { setScreen("form"); setError(null); }}
+            className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors"
+          >
+            <LogIn size={14} className="mr-1.5" />
+            Volver a iniciar sesión
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Login form ───────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#F9FBF9] flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
