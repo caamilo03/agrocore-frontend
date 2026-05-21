@@ -8,6 +8,7 @@ import {
   LogOut,
   Package,
   Building2,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -32,13 +33,14 @@ export default function Sidebar() {
   const { user, logout } = useAuth();
 
   const navItems = [
-    { name: "Panel Principal", path: "/", icon: LayoutDashboard },
-    { name: "Gestión de Especies", path: "/species", icon: Sprout },
-    { name: "Gestión de Sustratos", path: "/substrates", icon: Package },
-    { name: "Gestión de Proveedores", path: "/suppliers", icon: Building2 },
-    { name: "Lotes Activos", path: "/batches", icon: Layers },
-    { name: "Analítica Histórica", path: "/analytics", icon: BarChart3 },
-  ];
+    { name: "Panel Principal", path: "/", icon: LayoutDashboard, adminOnly: false },
+    { name: "Gestión de Especies", path: "/species", icon: Sprout, adminOnly: false },
+    { name: "Gestión de Sustratos", path: "/substrates", icon: Package, adminOnly: false },
+    { name: "Gestión de Proveedores", path: "/suppliers", icon: Building2, adminOnly: false },
+    { name: "Lotes Activos", path: "/batches", icon: Layers, adminOnly: false },
+    { name: "Analítica Histórica", path: "/analytics", icon: BarChart3, adminOnly: false },
+    { name: "Gestión de Usuarios", path: "/users", icon: Users, adminOnly: true },
+  ].filter((item) => !item.adminOnly || user?.role === "ADMIN");
 
   const handleLogout = () => {
     logout();
@@ -99,8 +101,8 @@ export default function Sidebar() {
             )}
             <div className="flex-1 min-w-0">
               <p className="font-bold text-slate-800 text-sm truncate">{user.username}</p>
-              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase mt-0.5 ${ROLE_BADGE[user.role] ?? "bg-slate-100 text-slate-600"}`}>
-                {ROLE_LABEL[user.role] ?? user.role}
+              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase mt-0.5 ${user.role ? (ROLE_BADGE[user.role] ?? "bg-slate-100 text-slate-600") : "bg-amber-100 text-amber-700"}`}>
+                {user.role ? (ROLE_LABEL[user.role] ?? user.role) : "PENDIENTE"}
               </span>
             </div>
           </div>

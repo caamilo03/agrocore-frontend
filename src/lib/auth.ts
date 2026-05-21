@@ -1,11 +1,13 @@
 export type UserRole = "ADMIN" | "OPERADOR" | "OBSERVADOR";
+export type UserStatus = "PENDIENTE" | "ACTIVO" | "BLOQUEADO";
 
 export interface User {
   id: string;
   username: string;
   email: string;
   avatarUrl: string;
-  role: UserRole;
+  role: UserRole | null;   // null when status === "PENDIENTE"
+  status: UserStatus;
 }
 
 const TOKEN_KEY = "agro_token";
@@ -38,11 +40,11 @@ export function clearAuth(): void {
 }
 
 /** True if the role can write (create/edit/delete) */
-export function canWrite(role: UserRole | undefined): boolean {
+export function canWrite(role: UserRole | null | undefined): boolean {
   return role === "ADMIN" || role === "OPERADOR";
 }
 
 /** True if the role has full admin access */
-export function isAdmin(role: UserRole | undefined): boolean {
+export function isAdmin(role: UserRole | null | undefined): boolean {
   return role === "ADMIN";
 }

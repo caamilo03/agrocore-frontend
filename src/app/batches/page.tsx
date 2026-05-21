@@ -5,7 +5,14 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { canWrite } from "@/lib/auth";
 import Link from 'next/link';
-import { Plus, Edit, Trash2, AlertCircle, Calendar, Sprout, Layers, Package, Activity, Leaf, Building2, BarChart3 } from 'lucide-react';
+import { Plus, Edit, Trash2, AlertCircle, Calendar, Sprout, Layers, Package, Activity, Leaf, Building2, BarChart3, UserCog } from 'lucide-react';
+
+interface ActiveUser {
+  id: string;
+  username: string;
+  email: string;
+  role: string | null;
+}
 
 interface CropBatch {
   id?: string;
@@ -39,6 +46,7 @@ const BATCHES_API_URL = "/batches";
 const SPECIES_API_URL = "/species";
 const SUBSTRATES_API_URL = "/substrates";
 const SUPPLIERS_API_URL = "/suppliers";
+const USERS_API_URL = "/users";
 
 export default function BatchesPage() {
   const { user } = useAuth();
@@ -51,6 +59,8 @@ export default function BatchesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<{ dates?: string; species?: string; substrate?: string }>({});
+  const [activeUsersList, setActiveUsersList] = useState<ActiveUser[]>([]);
+  const [originalIdUser, setOriginalIdUser] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<CropBatch>({
     idSpecies: "", idSubstrate: "", idSpeciesSupplier: "", idSubstrateSupplier: "",
@@ -155,6 +165,13 @@ export default function BatchesPage() {
       });
 
       if (response.ok) {
+        // If admin changed the assigned user, also call /reassign
+        if (isEditing && user?.role === "ADMIN" && formData.idUser !== originalIdUser) {
+          await apiFetch(`${BATCHES_API_URL}/${editingId}/reassign`, {
+            method: "POST",
+            body: JSON.stringify({ userId: formData.idUser || null }),
+          });
+        }
         fetchData();
         closeModal();
       } else {
@@ -176,19 +193,32 @@ export default function BatchesPage() {
     }
   };
 
+  const loadActiveUsers = useCallback(async () => {
+    if (user?.role !== "ADMIN") return;
+    try {
+      const res = await apiFetch(`${USERS_API_URL}?status=ACTIVO`);
+      if (res.ok) setActiveUsersList(await res.json());
+    } catch {
+      // non-critical, just no dropdown
+    }
+  }, [user?.role]);
+
   const openModalToCreate = () => {
     setEditingId(null);
+    setOriginalIdUser(null);
     setFormErrors({});
-    const now = new Date().toISOString().substring(0, 16); 
+    const now = new Date().toISOString().substring(0, 16);
     setFormData({
       idSpecies: "", idSubstrate: "", idSpeciesSupplier: "", idSubstrateSupplier: "", idUser: "",
       startDate: now, endDate: "", status: "ACTIVO", yieldKg: 0
     });
+    loadActiveUsers();
     setIsModalOpen(true);
   };
 
   const openModalToEdit = (batch: CropBatch) => {
     setEditingId(batch.id!);
+    setOriginalIdUser(batch.idUser ?? null);
     setFormErrors({});
     setFormData({
       ...batch,
@@ -197,6 +227,7 @@ export default function BatchesPage() {
       idSpeciesSupplier: batch.idSpeciesSupplier || "",
       idSubstrateSupplier: batch.idSubstrateSupplier || ""
     });
+    loadActiveUsers();
     setIsModalOpen(true);
   };
 
@@ -383,6 +414,28 @@ export default function BatchesPage() {
                   </div>
                 </div>
               </div>
+
+              {editingId !== null && user?.role === "ADMIN" && (
+                <div className="bg-slate-50 p-5 rounded-xl border border-slate-100">
+                  <div className="flex items-center mb-4">
+                    <UserCog size={18} className="text-slate-600 mr-2" />
+                    <h4 className="font-bold text-slate-700">Asignación de Operador <span className="text-sm font-normal text-slate-500">(Solo ADMIN)</span></h4>
+                  </div>
+                  <select
+                    name="idUser"
+                    value={formData.idUser ?? ""}
+                    onChange={handleInputChange}
+                    className="w-full border border-slate-300 rounded-lg p-2.5 text-slate-800 focus:outline-none focus:border-green-600 focus:ring-2 focus:ring-green-600/20 bg-white transition-all"
+                  >
+                    <option value="">Sin operador asignado</option>
+                    {activeUsersList.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.username} ({u.email}){u.role ? ` · ${u.role}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {editingId !== null && (
                 <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100">

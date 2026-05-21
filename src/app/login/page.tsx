@@ -36,7 +36,9 @@ export default function LoginPage() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({} as { error?: string }));
-        if (res.status === 401) {
+        if (res.status === 403) {
+          setError(body.error ?? "Tu cuenta ha sido suspendida. Contacta al administrador.");
+        } else if (res.status === 401) {
           setError(body.error ?? "Token de Google inválido o expirado.");
         } else if (res.status === 400) {
           setError(body.error ?? "Solicitud incorrecta.");
