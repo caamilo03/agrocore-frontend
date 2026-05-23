@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Users,
   CheckCircle2,
@@ -279,27 +279,68 @@ function UserRow({ user, tab, actionLoading, onApprove, onChangeRole, onBlock, o
 }
 
 function ApproveDropdown({ onApprove, busy }: { onApprove: (r: UserRole) => void; busy: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [dropUp, setDropUp] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const handleToggle = () => {
+    if (busy) return;
+    if (!open && containerRef.current) {
+      // Decide whether to render above or below based on available space
+      const rect = containerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setDropUp(spaceBelow < 160); // 160px ~ 3 items × ~48px + margin
+    }
+    setOpen((v) => !v);
+  };
+
+  const handleSelect = (role: UserRole) => {
+    setOpen(false);
+    onApprove(role);
+  };
+
   return (
-    <div className="relative group">
+    <div ref={containerRef} className="relative">
       <button
+        onClick={handleToggle}
         disabled={busy}
         className="inline-flex items-center px-3 py-1.5 text-xs font-bold text-[#1e5631] bg-green-50 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50"
       >
         <CheckCircle2 size={12} className="mr-1.5" />
         Aprobar
-        <ChevronDown size={12} className="ml-1.5" />
+        <ChevronDown size={12} className={`ml-1.5 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
-      <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl border border-slate-200 shadow-card-lg z-10 hidden group-hover:block">
-        {(["OPERADOR", "OBSERVADOR", "ADMIN"] as UserRole[]).map((role) => (
-          <button
-            key={role}
-            onClick={() => onApprove(role)}
-            className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors first:rounded-t-xl last:rounded-b-xl font-medium text-slate-700"
-          >
-            Como {ROLE_LABEL[role]}
-          </button>
-        ))}
-      </div>
+
+      {open && (
+        <div
+          className={`absolute right-0 w-44 bg-white rounded-xl border border-slate-200 shadow-card-lg z-50 ${
+            dropUp ? "bottom-full mb-1" : "top-full mt-1"
+          }`}
+        >
+          {(["OPERADOR", "OBSERVADOR", "ADMIN"] as UserRole[]).map((role) => (
+            <button
+              key={role}
+              onMouseDown={(e) => e.preventDefault()} // prevent blur before click
+              onClick={() => handleSelect(role)}
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors first:rounded-t-xl last:rounded-b-xl font-medium text-slate-700"
+            >
+              Como {ROLE_LABEL[role]}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
