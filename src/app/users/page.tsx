@@ -280,28 +280,45 @@ function UserRow({ user, tab, actionLoading, onApprove, onChangeRole, onBlock, o
 
 function ApproveDropdown({ onApprove, busy }: { onApprove: (r: UserRole) => void; busy: boolean }) {
   const [open, setOpen] = useState(false);
-  const [dropUp, setDropUp] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        buttonRef.current && !buttonRef.current.contains(target) &&
+        menuRef.current && !menuRef.current.contains(target)
+      ) {
         setOpen(false);
       }
     };
+    const scrollHandler = () => setOpen(false);
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    window.addEventListener("scroll", scrollHandler, true);
+    window.addEventListener("resize", scrollHandler);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      window.removeEventListener("scroll", scrollHandler, true);
+      window.removeEventListener("resize", scrollHandler);
+    };
   }, [open]);
 
   const handleToggle = () => {
     if (busy) return;
-    if (!open && containerRef.current) {
-      // Decide whether to render above or below based on available space
-      const rect = containerRef.current.getBoundingClientRect();
+    if (!open && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const menuWidth = 176; // w-44 = 11rem = 176px
+      const menuHeight = 150; // ~3 items
       const spaceBelow = window.innerHeight - rect.bottom;
-      setDropUp(spaceBelow < 160); // 160px ~ 3 items × ~48px + margin
+      const top = spaceBelow < menuHeight + 8
+        ? rect.top - menuHeight - 4
+        : rect.bottom + 4;
+      const left = rect.right - menuWidth; // right-align to button
+      setCoords({ top, left });
     }
     setOpen((v) => !v);
   };
@@ -312,8 +329,9 @@ function ApproveDropdown({ onApprove, busy }: { onApprove: (r: UserRole) => void
   };
 
   return (
-    <div ref={containerRef} className="relative">
+    <>
       <button
+        ref={buttonRef}
         onClick={handleToggle}
         disabled={busy}
         className="inline-flex items-center px-3 py-1.5 text-xs font-bold text-[#1e5631] bg-green-50 hover:bg-green-100 rounded-lg transition-colors disabled:opacity-50"
@@ -323,16 +341,16 @@ function ApproveDropdown({ onApprove, busy }: { onApprove: (r: UserRole) => void
         <ChevronDown size={12} className={`ml-1.5 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
-      {open && (
+      {open && coords && (
         <div
-          className={`absolute right-0 w-44 bg-white rounded-xl border border-slate-200 shadow-card-lg z-50 ${
-            dropUp ? "bottom-full mb-1" : "top-full mt-1"
-          }`}
+          ref={menuRef}
+          style={{ position: "fixed", top: coords.top, left: coords.left, width: 176 }}
+          className="bg-white rounded-xl border border-slate-200 shadow-card-lg z-[100]"
         >
           {(["OPERADOR", "OBSERVADOR", "ADMIN"] as UserRole[]).map((role) => (
             <button
               key={role}
-              onMouseDown={(e) => e.preventDefault()} // prevent blur before click
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => handleSelect(role)}
               className="w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 transition-colors first:rounded-t-xl last:rounded-b-xl font-medium text-slate-700"
             >
@@ -341,7 +359,7 @@ function ApproveDropdown({ onApprove, busy }: { onApprove: (r: UserRole) => void
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
