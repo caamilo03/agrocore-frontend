@@ -152,12 +152,18 @@ export default function BatchesPage() {
         payload.status = "ACTIVO";
         payload.yieldKg = 0;
       }
-      
+
       // Limpieza de campos opcionales para evitar strings vacíos en la BD
       if (!payload.endDate) payload.endDate = null;
       if (!payload.idSpeciesSupplier || payload.idSpeciesSupplier === "") payload.idSpeciesSupplier = null;
       if (!payload.idSubstrateSupplier || payload.idSubstrateSupplier === "") payload.idSubstrateSupplier = null;
       if (!payload.idUser) payload.idUser = null;
+
+      // El input datetime-local entrega "2026-05-25T22:45" (sin segundos, sin zona).
+      // El backend espera ISO 8601 con zona ("2026-05-25T22:45:00.000Z").
+      // Sin la conversión, Jackson no puede deserializar Instant y el endpoint falla.
+      if (payload.startDate) payload.startDate = new Date(payload.startDate).toISOString();
+      if (payload.endDate) payload.endDate = new Date(payload.endDate).toISOString();
 
       const response = await apiFetch(url, {
         method,
