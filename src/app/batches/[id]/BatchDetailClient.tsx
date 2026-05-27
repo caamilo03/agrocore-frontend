@@ -393,7 +393,7 @@ export default function BatchDetailClient({ batchId }: { batchId: string }) {
               </div>
               <div>
                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Peso Cosechado</p>
-                <p className="text-sm font-semibold text-slate-800 tabular-nums">{batch.yieldKg.toFixed(2)} kg</p>
+                <p className="text-sm font-semibold text-slate-800 tabular-nums">{batch.yieldKg != null ? `${batch.yieldKg.toFixed(2)} kg` : "—"}</p>
               </div>
             </div>
           )}

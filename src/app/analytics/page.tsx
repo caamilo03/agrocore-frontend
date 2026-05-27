@@ -305,7 +305,7 @@ export default function AnalyticsPage() {
               {batches.length === 0 && <option value="">Sin lotes {isHarvested ? "cosechados" : "activos"}</option>}
               {batches.map((b) => {
                 const sp = speciesList.find((s) => s.idSpecies === b.idSpecies);
-                const yieldLabel = isHarvested ? ` · ${b.yieldKg.toFixed(1)} kg` : "";
+                const yieldLabel = isHarvested && b.yieldKg != null ? ` · ${b.yieldKg.toFixed(1)} kg` : "";
                 return (
                   <option key={b.id} value={b.id}>
                     Lote {b.id.substring(0, 6).toUpperCase()} — {sp?.name ?? "sin especie"}{yieldLabel}
@@ -526,7 +526,7 @@ function TraceabilityCard({ trace, loading }: { trace: Traceability; loading: bo
             <TraceItem icon={Package} color="amber" label="Sustrato" value={substrate?.typeName ?? "—"} />
             <TraceItem icon={Building2} color="indigo" label="Proveedor de semilla" value={speciesSupplier?.nameSupplier ?? "—"} />
             <TraceItem icon={Building2} color="indigo" label="Proveedor de sustrato" value={substrateSupplier?.nameSupplier ?? "—"} />
-            <TraceItem icon={Scale} color="emerald" label="Peso cosechado" value={`${batch.yieldKg.toFixed(2)} kg`} highlight />
+            <TraceItem icon={Scale} color="emerald" label="Peso cosechado" value={batch.yieldKg != null ? `${batch.yieldKg.toFixed(2)} kg` : "—"} highlight />
           </div>
 
           {telemetryStats ? (
